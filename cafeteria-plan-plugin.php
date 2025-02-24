@@ -1,8 +1,8 @@
 <?php
 /**
- * Plugin Name: Cafeteria Plan Plugin
- * Description: Custom plugin for cafeteria plan PDFs with multi-step form on a single page (using sessions).
- * Version: 1.0
+ * Plugin Name: Cafeteria Plan Plugin (Single-Page, Multi-Step with Back/Edit)
+ * Description: A custom plugin to create cafeteria plan PDFs. Includes session-based multi-step flow on one page, with "Back" buttons to edit previous steps.
+ * Version: 1.1
  * Author: Joe
  */
 
@@ -15,7 +15,8 @@ require_once __DIR__ . '/vendor/autoload.php';
 use Dompdf\Dompdf;
 
 /**
- * 1. Start a session so we can store step data between submissions.
+ * 1. Start a session so we can store step data between submissions
+ *    Hook on 'plugins_loaded' to avoid "headers already sent" issues.
  */
 function cpp_start_session()
 {
@@ -23,77 +24,94 @@ function cpp_start_session()
         session_start();
     }
 }
-add_action('init', 'cpp_start_session', 1);
+add_action('plugins_loaded', 'cpp_start_session', 1);
 
 /**
- * 2. Enqueue any CSS/JS if needed
+ * 2. OPTIONAL: Bypass WP Rocket cache for a specific page slug
+ *    Adjust or remove if you already excluded in WP Rocket's settings.
+ */
+function skip_cache_on_cafeteria_page()
+{
+    if (is_page('cafeteria-plan-generator')) {
+        define('DONOTCACHEPAGE', true);
+    }
+}
+add_action('template_redirect', 'skip_cache_on_cafeteria_page', 1);
+
+/**
+ * 3. Enqueue any CSS/JS if needed
  */
 function cpp_enqueue_scripts()
 {
+    // Example: CSS file
     wp_enqueue_style('cpp-styles', plugin_dir_url(__FILE__) . 'css/style.css', array(), '1.0');
-    // Example JS if desired
+    // Example: JS file
     wp_enqueue_script('cpp-script', plugin_dir_url(__FILE__) . 'js/script.js', array('jquery'), '1.0', true);
 }
 add_action('wp_enqueue_scripts', 'cpp_enqueue_scripts');
 
 /**
- * 3. Main Shortcode: [cafeteria_plan_form]
- *    Displays Step 1, Step 2, Final Preview, etc., all on one page.
+ * 4. Main Shortcode [cafeteria_plan_form]
+ *    - Single-page multi-step flow (Step 1, Step 2, Final Preview)
+ *    - "Back" buttons let user return to previous steps
  */
 function cpp_render_cafeteria_form()
 {
-    // 3a. Initialize session data array if not present
+    // Initialize session storage array if not present
     if (!isset($_SESSION['cpp_data'])) {
         $_SESSION['cpp_data'] = array();
     }
 
-    // 3b. Determine which step we're currently on
-    //     Default to step 1 unless we see otherwise.
+    // Current step defaults to 1 if not set
     $current_step = $_SESSION['cpp_data']['current_step'] ?? 1;
 
-    // 3c. If the user just submitted Step 1
+    // --- STEP 1 submission ---
     if (isset($_POST['cpp_step1_submit'])) {
-        // Store step 1 data
         $_SESSION['cpp_data']['company_name'] = sanitize_text_field($_POST['company_name'] ?? '');
         $_SESSION['cpp_data']['effective_date'] = sanitize_text_field($_POST['effective_date'] ?? '');
-
-        // Move to Step 2
         $current_step = 2;
         $_SESSION['cpp_data']['current_step'] = 2;
     }
 
-    // 3d. If the user just submitted Step 2 (to show the final preview)
+    // --- STEP 2 submission ---
     if (isset($_POST['cpp_step2_submit'])) {
-        // Store step 2 data
         $_SESSION['cpp_data']['plan_details'] = sanitize_textarea_field($_POST['plan_details'] ?? '');
-
-        // Move to Step 3 (final preview)
         $current_step = 3;
         $_SESSION['cpp_data']['current_step'] = 3;
     }
 
-    // 3e. If user clicked "Generate Final PDF"
+    // --- Generate PDF (Final) ---
     if (isset($_POST['cpp_finalize'])) {
-        // Gather all data from session
         $data = $_SESSION['cpp_data'];
         cpp_generate_pdf($data);
-        exit; // Important to stop further WP rendering
+        exit; // Stop further page rendering
     }
 
-    // 3f. Now output the appropriate HTML for the current step
+    // --- Back buttons to previous steps ---
+    if (isset($_POST['cpp_back_to_step1'])) {
+        $current_step = 1;
+        $_SESSION['cpp_data']['current_step'] = 1;
+    }
+    if (isset($_POST['cpp_back_to_step2'])) {
+        $current_step = 2;
+        $_SESSION['cpp_data']['current_step'] = 2;
+    }
+
     ob_start();
 
     switch ($current_step) {
         case 1:
-            // STEP 1 Form
+            // Populate fields from session if they exist
+            $company_name = $_SESSION['cpp_data']['company_name'] ?? '';
+            $effective_date = $_SESSION['cpp_data']['effective_date'] ?? '';
             ?>
             <h2>Step 1: Basic Info</h2>
             <form method="post">
                 <label>Company Name:</label><br>
-                <input type="text" name="company_name" value="" /><br><br>
+                <input type="text" name="company_name" value="<?php echo esc_attr($company_name); ?>" /><br><br>
 
                 <label>Effective Date:</label><br>
-                <input type="date" name="effective_date" value="" /><br><br>
+                <input type="date" name="effective_date" value="<?php echo esc_attr($effective_date); ?>" /><br><br>
 
                 <button type="submit" name="cpp_step1_submit" value="1">Next: Step 2</button>
             </form>
@@ -101,9 +119,9 @@ function cpp_render_cafeteria_form()
             break;
 
         case 2:
-            // STEP 2 Form
             $company_name = $_SESSION['cpp_data']['company_name'] ?? '';
             $effective_date = $_SESSION['cpp_data']['effective_date'] ?? '';
+            $plan_details = $_SESSION['cpp_data']['plan_details'] ?? '';
             ?>
             <h2>Step 2: Additional Info</h2>
             <p><strong>So far:</strong></p>
@@ -114,15 +132,19 @@ function cpp_render_cafeteria_form()
 
             <form method="post">
                 <label>Plan Details:</label><br>
-                <textarea name="plan_details" rows="5" cols="50"></textarea><br><br>
+                <textarea name="plan_details" rows="5" cols="50"><?php echo esc_textarea($plan_details); ?></textarea><br><br>
 
                 <button type="submit" name="cpp_step2_submit" value="1">Preview Final Plan</button>
+            </form>
+
+            <!-- Back button to Step 1 -->
+            <form method="post" style="margin-top:10px;">
+                <button type="submit" name="cpp_back_to_step1" value="1">Back to Step 1</button>
             </form>
             <?php
             break;
 
         case 3:
-            // FINAL PREVIEW
             $company_name = $_SESSION['cpp_data']['company_name'] ?? '';
             $effective_date = $_SESSION['cpp_data']['effective_date'] ?? '';
             $plan_details = $_SESSION['cpp_data']['plan_details'] ?? '';
@@ -135,8 +157,16 @@ function cpp_render_cafeteria_form()
                 <p><strong>Plan Details:</strong><br><?php echo nl2br(esc_html($plan_details)); ?></p>
             </div>
 
-            <form method="post">
+            <form method="post" style="display:inline;">
                 <button type="submit" name="cpp_finalize" value="1">Generate Final PDF</button>
+            </form>
+
+            <!-- Edit links to step 1 or step 2 -->
+            <form method="post" style="display:inline;">
+                <button type="submit" name="cpp_back_to_step2" value="1">Edit Step 2</button>
+            </form>
+            <form method="post" style="display:inline;">
+                <button type="submit" name="cpp_back_to_step1" value="1">Edit Step 1</button>
             </form>
             <?php
             break;
@@ -147,13 +177,13 @@ function cpp_render_cafeteria_form()
 add_shortcode('cafeteria_plan_form', 'cpp_render_cafeteria_form');
 
 /**
- * 4. PDF Generation Function
+ * 5. PDF Generation Function
  */
 function cpp_generate_pdf($data)
 {
     $dompdf = new Dompdf();
 
-    // Pull out data safely
+    // Safely extract data
     $company_name = $data['company_name'] ?? '';
     $effective_date = $data['effective_date'] ?? '';
     $plan_details = $data['plan_details'] ?? '';
@@ -168,6 +198,10 @@ function cpp_generate_pdf($data)
     $dompdf->setPaper('A4', 'portrait');
     $dompdf->render();
 
-    // Stream the PDF
+    // Clear any output buffer to avoid corrupting PDF
+    ob_end_clean();
+
+    // Stream the PDF to the browser
     $dompdf->stream("cafeteria-plan.pdf", array("Attachment" => 0));
+    exit;
 }
