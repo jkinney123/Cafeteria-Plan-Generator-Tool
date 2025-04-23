@@ -1,8 +1,8 @@
 <?php
 /**
- * Plugin Name: Cafeteria Plan Plugin (CPT + GET-based PDF)
- * Description: A custom plugin to create cafeteria plan PDFs with a multi-step wizard, storing data in a CPT. The final PDF is generated via a GET request, similar to the "Hello World" test.
- * Version: 2.1
+ * Plugin Name: Cafeteria Plan Plugin (CPT + Multi-Step + Conditionals)
+ * Description: Demonstrates multiple question types, if/else logic, and styled PDF output for cafeteria plans.
+ * Version: 2.2
  * Author: Joe
  */
 
@@ -37,9 +37,9 @@ function cpp_register_cpt()
     $args = array(
         'labels' => $labels,
         'public' => false, // not publicly queryable
-        'show_ui' => true,  // show in admin
+        'show_ui' => true,
         'show_in_menu' => true,
-        'menu_position' => 20,    // position in admin menu
+        'menu_position' => 20,
         'menu_icon' => 'dashicons-clipboard',
         'supports' => array('title'),
         'has_archive' => false,
@@ -50,8 +50,8 @@ function cpp_register_cpt()
 add_action('init', 'cpp_register_cpt');
 
 /**
- * 2) Debug: Minimal "Hello World" Dompdf test
- *    Visit https://yoursite.com/?dompdf_test=1 to confirm Dompdf works.
+ * 2) Minimal "Hello World" Dompdf test
+ *    https://yoursite.com/?dompdf_test=1
  */
 add_action('init', function () {
     if (isset($_GET['dompdf_test'])) {
@@ -78,8 +78,7 @@ add_action('init', function () {
 });
 
 /**
- * 3) Hook to generate PDF via GET, mimicking the "Hello World" approach.
- *    e.g. https://yoursite.com/?caf_plan_pdf=1&plan_id=123
+ * 3) GET-based PDF route: https://yoursite.com/?caf_plan_pdf=1&plan_id=123
  */
 add_action('init', function () {
     if (isset($_GET['caf_plan_pdf']) && !empty($_GET['plan_id'])) {
@@ -90,7 +89,7 @@ add_action('init', function () {
 });
 
 /**
- * 4) Optional: Skip cache on cafeteria-plan-generator page
+ * 4) Optional: Skip cache
  */
 function cpp_wizard_skip_cache()
 {
@@ -112,6 +111,7 @@ add_action('wp_enqueue_scripts', 'cpp_wizard_enqueue_scripts');
 
 /**
  * 6) Define Wizard Steps
+ *    Now we have 4 steps: Basic Info, Additional Info, Plan Options, Preview & Generate.
  */
 function cpp_get_wizard_steps()
 {
@@ -139,11 +139,41 @@ function cpp_get_wizard_steps()
                 [
                     'type' => 'textarea',
                     'name' => 'plan_details',
-                    'label' => 'Plan Details',
+                    'label' => 'General Plan Details',
                 ],
             ],
         ],
         3 => [
+            'slug' => 'plan-options',
+            'title' => 'Plan Options',
+            'fields' => [
+                // Example: radio for COBRA
+                [
+                    'type' => 'radio-cobra',
+                    'name' => 'include_cobra',
+                    'label' => 'Include COBRA coverage?',
+                ],
+                // Example: radio for FSA
+                [
+                    'type' => 'radio-fsa',
+                    'name' => 'include_fsa',
+                    'label' => 'Include FSA (Flexible Spending Account)?',
+                ],
+                // Example: checkboxes for multiple benefits
+                [
+                    'type' => 'checkbox-benefits',
+                    'name' => 'benefits_included',
+                    'label' => 'Which benefits are included?',
+                ],
+                // Extra text field for special requirements
+                [
+                    'type' => 'textarea',
+                    'name' => 'special_requirements',
+                    'label' => 'Any special eligibility requirements?',
+                ],
+            ],
+        ],
+        4 => [
             'slug' => 'preview',
             'title' => 'Preview & Generate',
             'fields' => [],
@@ -159,11 +189,11 @@ function cpp_load_plan_library()
     return [
         [
             'id' => 'cobra_clause',
-            'trigger' => 'include_cobra',
+            'trigger' => 'include_cobra', // used if user selected "yes"
             'title' => 'COBRA Coverage Clause',
-            'body' => 'This plan provides that employees may continue coverage under COBRA...',
+            'body' => 'Under this plan, employees who qualify may continue coverage per COBRA guidelines...',
         ],
-        // Add more paragraphs here...
+        // You can add more standard paragraphs here (FSA, etc.) or just inline them in the PDF code.
     ];
 }
 
@@ -172,15 +202,11 @@ function cpp_load_plan_library()
  */
 function cpp_wizard_shortcode()
 {
-    // Default step = 1
     $current_step = isset($_POST['current_step']) ? intval($_POST['current_step']) : 1;
-
-    // Plan ID from hidden field
     $caf_plan_id = isset($_POST['cafeteria_plan_id']) ? intval($_POST['cafeteria_plan_id']) : 0;
 
     $steps = cpp_get_wizard_steps();
 
-    // Handle form submission
     cpp_wizard_process_form($steps, $current_step, $caf_plan_id);
 
     ob_start();
@@ -211,7 +237,6 @@ function cpp_wizard_shortcode()
         <!-- Main content -->
         <div class="cpp-wizard-main" style="flex:1;">
             <?php
-            // Render current step
             cpp_wizard_render_step($steps, $current_step, $caf_plan_id);
             ?>
         </div>
@@ -223,11 +248,10 @@ function cpp_wizard_shortcode()
 add_shortcode('cafeteria_plan_form_wizard', 'cpp_wizard_shortcode');
 
 /**
- * 9) Handle form submissions
+ * 9) Process form submissions
  */
 function cpp_wizard_process_form($steps, &$current_step, &$caf_plan_id)
 {
-    // Possibly user navigated via the sidebar
     if (isset($_POST['current_step'])) {
         $desiredStep = intval($_POST['current_step']);
         if ($desiredStep >= 1 && $desiredStep <= count($steps)) {
@@ -239,7 +263,6 @@ function cpp_wizard_process_form($steps, &$current_step, &$caf_plan_id)
     if (isset($_POST['cpp_wizard_submit_step'])) {
         $submittedStep = intval($_POST['cpp_wizard_submit_step']);
 
-        // If no plan ID yet, create one now
         if ($caf_plan_id === 0) {
             $caf_plan_id = wp_insert_post([
                 'post_type' => 'cafeteria_plan',
@@ -249,30 +272,40 @@ function cpp_wizard_process_form($steps, &$current_step, &$caf_plan_id)
         }
 
         if (isset($steps[$submittedStep])) {
-            // Save each field in postmeta
             foreach ($steps[$submittedStep]['fields'] as $field) {
                 $name = $field['name'];
                 if (isset($_POST[$name])) {
-                    $value = ($field['type'] === 'textarea')
-                        ? sanitize_textarea_field($_POST[$name])
-                        : sanitize_text_field($_POST[$name]);
-
+                    // handle multiple field types
+                    if ($field['type'] === 'textarea') {
+                        $value = sanitize_textarea_field($_POST[$name]);
+                    } elseif ($field['type'] === 'radio-cobra' || $field['type'] === 'radio-fsa') {
+                        // e.g. "yes" or "no"
+                        $value = sanitize_text_field($_POST[$name]);
+                    } elseif ($field['type'] === 'checkbox-benefits') {
+                        // could be multiple checkboxes
+                        // store as array or comma separated string
+                        $arr = array_map('sanitize_text_field', (array) $_POST[$name]);
+                        $value = implode(',', $arr);
+                    } else {
+                        $value = sanitize_text_field($_POST[$name]);
+                    }
                     update_post_meta($caf_plan_id, '_cpp_' . $name, $value);
+                } else {
+                    // If field wasn't set (like no checkboxes checked), store empty
+                    update_post_meta($caf_plan_id, '_cpp_' . $name, '');
                 }
             }
         }
 
-        // Go to next step if not final
+        // Move to next step if not final
         if ($submittedStep < count($steps)) {
             $current_step = $submittedStep + 1;
         }
     }
-
-    // No more direct PDF generation here, since we switched to GET-based
 }
 
 /**
- * 10) Render current step or preview
+ * 10) Render current step
  */
 function cpp_wizard_render_step($steps, $current_step, $caf_plan_id)
 {
@@ -284,12 +317,10 @@ function cpp_wizard_render_step($steps, $current_step, $caf_plan_id)
     $stepData = $steps[$current_step];
 
     if ($stepData['slug'] === 'preview') {
-        // If final step, show preview + link to GET-based PDF
         cpp_wizard_render_preview_step($caf_plan_id);
         return;
     }
 
-    // Otherwise, render form fields for the current step
     ?>
     <h2><?php echo esc_html($stepData['title']); ?></h2>
     <form method="post">
@@ -297,28 +328,56 @@ function cpp_wizard_render_step($steps, $current_step, $caf_plan_id)
         <input type="hidden" name="current_step" value="<?php echo esc_attr($current_step); ?>" />
 
         <?php
-        // Load existing data
+        // Load existing meta from DB
         foreach ($stepData['fields'] as $field):
             $name = $field['name'];
             $label = $field['label'];
             $type = $field['type'];
             $value = '';
-
             if ($caf_plan_id) {
                 $value = get_post_meta($caf_plan_id, '_cpp_' . $name, true);
             }
-            ?>
-            <div style="margin-bottom: 1em;">
-                <label><?php echo esc_html($label); ?>:</label><br>
-                <?php if ($type === 'textarea'): ?>
-                    <textarea name="<?php echo esc_attr($name); ?>" rows="5"
-                        cols="50"><?php echo esc_textarea($value); ?></textarea>
-                <?php else: ?>
-                    <input type="<?php echo esc_attr($type); ?>" name="<?php echo esc_attr($name); ?>"
-                        value="<?php echo esc_attr($value); ?>" />
-                <?php endif; ?>
-            </div>
-        <?php endforeach; ?>
+
+            echo '<div style="margin-bottom: 1.5em;">';
+            echo '<label><strong>' . esc_html($label) . '</strong></label><br>';
+
+            if ($type === 'textarea') {
+                // Simple text area
+                ?>
+                <textarea name="<?php echo esc_attr($name); ?>" rows="4" cols="50"><?php echo esc_textarea($value); ?></textarea>
+                <?php
+            } elseif ($type === 'radio-cobra' || $type === 'radio-fsa') {
+                // Yes/No radio
+                $yesChecked = ($value === 'yes') ? 'checked' : '';
+                $noChecked = ($value === 'no') ? 'checked' : '';
+                ?>
+                <label><input type="radio" name="<?php echo esc_attr($name); ?>" value="yes" <?php echo $yesChecked; ?>> Yes</label>
+                <label style="margin-left:1em;"><input type="radio" name="<?php echo esc_attr($name); ?>" value="no" <?php echo $noChecked; ?>> No</label>
+                <?php
+            } elseif ($type === 'checkbox-benefits') {
+                // Multiple checkboxes
+                $selectedVals = explode(',', $value); // stored as comma separated string
+                $allOptions = ['Medical', 'Dental', 'Vision', 'Life'];
+                foreach ($allOptions as $opt) {
+                    $checked = in_array($opt, $selectedVals) ? 'checked' : '';
+                    ?>
+                    <label style="display:inline-block; margin-right:1em;">
+                        <input type="checkbox" name="<?php echo esc_attr($name); ?>[]" value="<?php echo esc_attr($opt); ?>" <?php echo $checked; ?>>
+                        <?php echo esc_html($opt); ?>
+                    </label>
+                    <?php
+                }
+            } else {
+                // Basic text input or date
+                ?>
+                <input type="<?php echo esc_attr($type); ?>" name="<?php echo esc_attr($name); ?>"
+                    value="<?php echo esc_attr($value); ?>">
+                <?php
+            }
+
+            echo '</div>';
+        endforeach;
+        ?>
 
         <button type="submit" name="cpp_wizard_submit_step" value="<?php echo $current_step; ?>">
             <?php echo ($current_step < count($steps)) ? 'Next' : 'Preview'; ?>
@@ -328,49 +387,107 @@ function cpp_wizard_render_step($steps, $current_step, $caf_plan_id)
 }
 
 /**
- * 11) Render the "Preview" step
+ * 11) Render Preview step
  */
 function cpp_wizard_render_preview_step($caf_plan_id)
 {
     ?>
     <h2>Preview Cafeteria Plan</h2>
-    <p>This is an HTML preview of what the PDF will look like.</p>
+    <p>This is an HTML preview of the final PDF.</p>
 
-    <div style="border:1px solid #ccc; padding:10px;">
+
+    <style>
+        .pdf-preview-wrapper {
+            background: #ffffff;
+            padding: 72pt;
+            margin: 40px auto;
+            max-width: 816px;
+            box-shadow: 0 0 12px rgba(0, 0, 0, 0.15);
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 12pt;
+            line-height: 1.5;
+            color: #000;
+        }
+
+        .pdf-preview-wrapper h1,
+        .pdf-preview-wrapper h2,
+        .pdf-preview-wrapper h3 {
+            font-family: 'Times New Roman', Times, serif;
+            font-weight: bold;
+            text-align: center;
+            margin-top: 24pt;
+            margin-bottom: 12pt;
+        }
+
+        .pdf-preview-wrapper h1 {
+            font-size: 18pt;
+            text-transform: uppercase;
+        }
+
+        .pdf-preview-wrapper h2 {
+            font-size: 16pt;
+        }
+
+        .pdf-preview-wrapper h3 {
+            font-size: 14pt;
+        }
+
+        .pdf-preview-wrapper p {
+            margin: 0 0 12pt 0;
+        }
+    </style>
+    <div class="pdf-preview-wrapper">
+
         <?php
         $company_name = get_post_meta($caf_plan_id, '_cpp_company_name', true);
         $effective_date = get_post_meta($caf_plan_id, '_cpp_effective_date', true);
         $plan_details = get_post_meta($caf_plan_id, '_cpp_plan_details', true);
+        $special_req = get_post_meta($caf_plan_id, '_cpp_special_requirements', true);
 
         $company_name = esc_html($company_name);
         $effective_date = esc_html($effective_date);
         $plan_details = esc_html($plan_details);
+        $special_req = esc_html($special_req);
 
-        $library = cpp_load_plan_library();
+        $include_cobra = get_post_meta($caf_plan_id, '_cpp_include_cobra', true);  // yes/no
+        $include_fsa = get_post_meta($caf_plan_id, '_cpp_include_fsa', true);    // yes/no
+        $benefits_str = get_post_meta($caf_plan_id, '_cpp_benefits_included', true); // comma separated
+        $benefits_arr = array_filter(explode(',', $benefits_str));
+
         ?>
-
         <h1>Cafeteria Plan</h1>
         <p><strong>Company:</strong> <?php echo $company_name; ?></p>
         <p><strong>Effective Date:</strong> <?php echo $effective_date; ?></p>
         <p><strong>Plan Details:</strong><br><?php echo nl2br($plan_details); ?></p>
 
-        <?php
-        // Example if there's a "include_cobra" meta
-        $include_cobra = get_post_meta($caf_plan_id, '_cpp_include_cobra', true);
-        if (!empty($include_cobra) && $include_cobra === 'yes') {
-            foreach ($library as $paragraph) {
-                if ($paragraph['trigger'] === 'include_cobra') {
-                    echo '<h3>' . esc_html($paragraph['title']) . '</h3>';
-                    echo '<p>' . esc_html($paragraph['body']) . '</p>';
-                }
-            }
-        }
-        ?>
+        <?php if ($include_cobra === 'yes'): ?>
+            <h3>COBRA Coverage</h3>
+            <p>This plan will include COBRA coverage clauses for eligible employees.</p>
+        <?php endif; ?>
+
+        <?php if ($include_fsa === 'yes'): ?>
+            <h3>Flexible Spending Account (FSA)</h3>
+            <p>Your cafeteria plan will contain FSA provisions for medical expenses, as appropriate.</p>
+        <?php endif; ?>
+
+        <?php if (!empty($benefits_arr)): ?>
+            <h3>Included Benefits</h3>
+            <ul>
+                <?php foreach ($benefits_arr as $b): ?>
+                    <li><?php echo esc_html($b); ?> coverage included.</li>
+                <?php endforeach; ?>
+            </ul>
+        <?php endif; ?>
+
+        <?php if (!empty($special_req)): ?>
+            <h3>Special Eligibility Requirements</h3>
+            <p><?php echo nl2br($special_req); ?></p>
+        <?php endif; ?>
     </div>
 
-    <!-- Instead of a form post, we use GET-based link -->
     <?php if ($caf_plan_id): ?>
         <p style="margin-top: 15px;">
+            <!-- GET-based PDF generation link -->
             <a href="<?php echo esc_url(add_query_arg([
                 'caf_plan_pdf' => 1,
                 'plan_id' => $caf_plan_id
@@ -383,13 +500,12 @@ function cpp_wizard_render_preview_step($caf_plan_id)
 }
 
 /**
- * 12) PDF generation function
+ * 12) PDF Generation
  */
 function cpp_wizard_generate_pdf($caf_plan_id)
 {
     error_log('DEBUG: Entered cpp_wizard_generate_pdf function.');
 
-    // Clear out any buffer
     if (ob_get_length()) {
         ob_end_clean();
     }
@@ -397,24 +513,86 @@ function cpp_wizard_generate_pdf($caf_plan_id)
 
     $dompdf = new Dompdf();
 
+    // Gather data from postmeta
     $company_name = get_post_meta($caf_plan_id, '_cpp_company_name', true);
     $effective_date = get_post_meta($caf_plan_id, '_cpp_effective_date', true);
     $plan_details = get_post_meta($caf_plan_id, '_cpp_plan_details', true);
+    $special_req = get_post_meta($caf_plan_id, '_cpp_special_requirements', true);
 
+    $include_cobra = get_post_meta($caf_plan_id, '_cpp_include_cobra', true);
+    $include_fsa = get_post_meta($caf_plan_id, '_cpp_include_fsa', true);
+    $benefits_str = get_post_meta($caf_plan_id, '_cpp_benefits_included', true);
+    $benefits_arr = array_filter(explode(',', $benefits_str));
+
+    // Convert to safe HTML
     $company_name = esc_html($company_name);
     $effective_date = esc_html($effective_date);
     $plan_details = esc_html($plan_details);
+    $special_req = esc_html($special_req);
 
+    // Let's load library in case we want to conditionally add text
     $library = cpp_load_plan_library();
-    $include_cobra = get_post_meta($caf_plan_id, '_cpp_include_cobra', true);
 
-    // Build the HTML
-    $html = '<h1>Cafeteria Plan</h1>';
-    $html .= '<p><strong>Company:</strong> ' . $company_name . '</p>';
-    $html .= '<p><strong>Effective Date:</strong> ' . $effective_date . '</p>';
-    $html .= '<p><strong>Plan Details:</strong><br>' . nl2br($plan_details) . '</p>';
+    // Build the final PDF HTML with basic styling
+    $html = '
+<style>
+    body {
+        font-family: "Times New Roman", serif;
+        font-size: 12pt;
+        line-height: 1.5;
+        margin: 72pt;
+        color: #000;
+    }
+    h1, h2, h3 {
+        font-family: "Times New Roman", serif;
+        font-weight: bold;
+        text-align: center;
+        margin-top: 24pt;
+        margin-bottom: 12pt;
+    }
+    h1 {
+        font-size: 18pt;
+        text-transform: uppercase;
+    }
+    h2 {
+        font-size: 16pt;
+    }
+    h3 {
+        font-size: 14pt;
+    }
+    p {
+        margin: 0 0 12pt 0;
+    }
 
-    if (!empty($include_cobra) && $include_cobra === 'yes') {
+    .pdf-preview-wrapper {
+        background: #fff;
+        padding: 72px;
+        margin: 0 auto;
+        max-width: 816px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        font-family: "Times New Roman", serif;
+        font-size: 12pt;
+        line-height: 1.5;
+        color: #000;
+    }
+</style>
+';
+
+    $html .= '<div class="header-area">
+        <h1>Cafeteria Plan</h1>
+        <p style="margin:5px 0;"><strong>Company:</strong> ' . $company_name . '</p>
+        <p><strong>Effective Date:</strong> ' . $effective_date . '</p>
+    </div>';
+
+    $html .= '<hr>';
+
+    // Main content
+    $html .= '<h2>Plan Details</h2>';
+    $html .= '<p>' . nl2br($plan_details) . '</p>';
+
+    // COBRA example
+    if ($include_cobra === 'yes') {
+        // If we had "COBRA" in library, we can add that:
         foreach ($library as $paragraph) {
             if ($paragraph['trigger'] === 'include_cobra') {
                 $html .= '<h3>' . esc_html($paragraph['title']) . '</h3>';
@@ -422,6 +600,33 @@ function cpp_wizard_generate_pdf($caf_plan_id)
             }
         }
     }
+
+    // FSA
+    if ($include_fsa === 'yes') {
+        $html .= '<h3>Flexible Spending Account (FSA)</h3>';
+        $html .= '<p>Under this cafeteria plan, participants can elect to contribute a portion of their earnings to cover certain medical or dependent care expenses, as specified by IRS guidelines.</p>';
+    }
+
+    // Benefits
+    if (!empty($benefits_arr)) {
+        $html .= '<h3>Included Benefits</h3><ul>';
+        foreach ($benefits_arr as $b) {
+            $html .= '<li>' . esc_html($b) . ' coverage included</li>';
+        }
+        $html .= '</ul>';
+    }
+
+    // Special Requirements
+    if (!empty($special_req)) {
+        $html .= '<h3>Special Eligibility Requirements</h3>';
+        $html .= '<p>' . nl2br($special_req) . '</p>';
+    }
+
+    // Footer
+    $html .= '<div class="footer-area">
+        <p>This Cafeteria Plan Document is provided for demonstration purposes.</p>
+        <p>&copy; ' . date('Y') . ' Your Company. All rights reserved.</p>
+    </div>';
 
     error_log('DEBUG: HTML for PDF => ' . $html);
 
@@ -433,10 +638,6 @@ function cpp_wizard_generate_pdf($caf_plan_id)
         $pdfOutput = $dompdf->output();
         $length = strlen($pdfOutput);
         error_log('DEBUG: PDF length = ' . $length);
-
-        if ($length === 0) {
-            error_log('DEBUG: Dompdf returned 0 bytes. Possibly a missing PHP extension or an internal error.');
-        }
 
         header('Content-Type: application/pdf');
         header('Content-Disposition: attachment; filename="cafeteria-plan.pdf"');
@@ -451,7 +652,7 @@ function cpp_wizard_generate_pdf($caf_plan_id)
 }
 
 /**
- * 13) Log if template_redirect fires after PDF attempt
+ * 13) Log template_redirect (optional debug)
  */
 add_action('template_redirect', function () {
     error_log('DEBUG: template_redirect is firing...');
