@@ -1,8 +1,8 @@
 <?php
 /**
- * Plugin Name: Cafeteria Plan Plugin (CPT + Multi-Step + Conditionals)
- * Description: Demonstrates multiple question types, if/else logic, and styled PDF output for cafeteria plans.
- * Version: 2.2
+ * Plugin Name: Cafeteria Plan Plugin (Updated)
+ * Description: Cafeteria Plan Wizard Plugin for Minnesota Healthcare Compliance Website.
+ * Version: 2.3
  * Author: Joe
  */
 
@@ -13,9 +13,8 @@ if (!defined('ABSPATH')) {
 require_once __DIR__ . '/vendor/autoload.php';
 use Dompdf\Dompdf;
 
-/**
- * 1) Register the Custom Post Type: 'cafeteria_plan'
- */
+
+// Register the Custom Post Type
 function cpp_register_cpt()
 {
     $labels = array(
@@ -36,7 +35,7 @@ function cpp_register_cpt()
     );
     $args = array(
         'labels' => $labels,
-        'public' => false, // not publicly queryable
+        'public' => false,
         'show_ui' => true,
         'show_in_menu' => true,
         'menu_position' => 20,
@@ -48,34 +47,6 @@ function cpp_register_cpt()
     register_post_type('cafeteria_plan', $args);
 }
 add_action('init', 'cpp_register_cpt');
-
-/**
- * 2) Minimal "Hello World" Dompdf test
- *    https://yoursite.com/?dompdf_test=1
- */
-add_action('init', function () {
-    if (isset($_GET['dompdf_test'])) {
-        error_log('DEBUG: Entered dompdf_test route.');
-        $testDomPdf = new Dompdf();
-        try {
-            $testHtml = '<h1>Hello Dompdf!</h1><p>This is a minimal test of Dompdf.</p>';
-            $testDomPdf->loadHtml($testHtml);
-            $testDomPdf->setPaper('A4', 'portrait');
-            $testDomPdf->render();
-
-            $pdfOutput = $testDomPdf->output();
-            error_log('DEBUG: HelloWorld PDF length = ' . strlen($pdfOutput));
-
-            header('Content-Type: application/pdf');
-            header('Content-Disposition: attachment; filename="test.pdf"');
-            echo $pdfOutput;
-        } catch (\Exception $e) {
-            error_log('DOMPDF TEST ERROR: ' . $e->getMessage());
-            echo 'Dompdf test failed: ' . esc_html($e->getMessage());
-        }
-        exit;
-    }
-});
 
 /**
  * 3) GET-based PDF route: https://yoursite.com/?caf_plan_pdf=1&plan_id=123
@@ -113,12 +84,13 @@ add_action('wp_enqueue_scripts', 'cpp_wizard_enqueue_scripts');
  * 6) Define Wizard Steps
  *    Now we have 4 steps: Basic Info, Additional Info, Plan Options, Preview & Generate.
  */
+// Define Wizard Steps
 function cpp_get_wizard_steps()
 {
     return [
         1 => [
-            'slug' => 'basic-info',
-            'title' => 'Basic Info',
+            'slug' => 'demographics',
+            'title' => 'Demographics',
             'fields' => [
                 [
                     'type' => 'text',
@@ -133,52 +105,37 @@ function cpp_get_wizard_steps()
             ],
         ],
         2 => [
-            'slug' => 'additional-info',
-            'title' => 'Additional Info',
+            'slug' => 'plan-options',
+            'title' => 'Plan Options',
             'fields' => [
                 [
-                    'type' => 'textarea',
-                    'name' => 'plan_details',
-                    'label' => 'General Plan Details',
+                    'type' => 'checkbox-multi',
+                    'name' => 'plan_options',
+                    'label' => 'Select Plan Options:',
+                    'options' => [
+                        'Pre-Tax Premiums',
+                        'Health Flexible Spending Account (Health FSA)',
+                        'Health Savings Account (HSA)',
+                        'Dependent Care Account'
+                    ],
                 ],
             ],
         ],
         3 => [
-            'slug' => 'plan-options',
-            'title' => 'Plan Options',
-            'fields' => [
-                // Example: radio for COBRA
-                [
-                    'type' => 'radio-cobra',
-                    'name' => 'include_cobra',
-                    'label' => 'Include COBRA coverage?',
-                ],
-                // Example: radio for FSA
-                [
-                    'type' => 'radio-fsa',
-                    'name' => 'include_fsa',
-                    'label' => 'Include FSA (Flexible Spending Account)?',
-                ],
-                // Example: checkboxes for multiple benefits
-                [
-                    'type' => 'checkbox-benefits',
-                    'name' => 'benefits_included',
-                    'label' => 'Which benefits are included?',
-                ],
-                // Extra text field for special requirements
-                [
-                    'type' => 'textarea',
-                    'name' => 'special_requirements',
-                    'label' => 'Any special eligibility requirements?',
-                ],
-            ],
-        ],
-        4 => [
             'slug' => 'preview',
             'title' => 'Preview & Generate',
             'fields' => [],
         ],
     ];
+}
+
+// Validation to ensure at least one plan option is selected
+function cpp_validate_plan_options($post_data)
+{
+    if (empty($post_data['plan_options'])) {
+        return 'Please select at least one Plan Option.';
+    }
+    return '';
 }
 
 /**
@@ -276,20 +233,22 @@ function cpp_wizard_process_form($steps, &$current_step, &$caf_plan_id)
                 $name = $field['name'];
                 if (isset($_POST[$name])) {
                     // handle multiple field types
+
                     if ($field['type'] === 'textarea') {
                         $value = sanitize_textarea_field($_POST[$name]);
                     } elseif ($field['type'] === 'radio-cobra' || $field['type'] === 'radio-fsa') {
-                        // e.g. "yes" or "no"
                         $value = sanitize_text_field($_POST[$name]);
                     } elseif ($field['type'] === 'checkbox-benefits') {
-                        // could be multiple checkboxes
-                        // store as array or comma separated string
+                        $arr = array_map('sanitize_text_field', (array) $_POST[$name]);
+                        $value = implode(',', $arr);
+                    } elseif ($field['type'] === 'checkbox-multi') {
                         $arr = array_map('sanitize_text_field', (array) $_POST[$name]);
                         $value = implode(',', $arr);
                     } else {
                         $value = sanitize_text_field($_POST[$name]);
                     }
                     update_post_meta($caf_plan_id, '_cpp_' . $name, $value);
+
                 } else {
                     // If field wasn't set (like no checkboxes checked), store empty
                     update_post_meta($caf_plan_id, '_cpp_' . $name, '');
@@ -341,13 +300,12 @@ function cpp_wizard_render_step($steps, $current_step, $caf_plan_id)
             echo '<div style="margin-bottom: 1.5em;">';
             echo '<label><strong>' . esc_html($label) . '</strong></label><br>';
 
+
             if ($type === 'textarea') {
-                // Simple text area
                 ?>
                 <textarea name="<?php echo esc_attr($name); ?>" rows="4" cols="50"><?php echo esc_textarea($value); ?></textarea>
                 <?php
             } elseif ($type === 'radio-cobra' || $type === 'radio-fsa') {
-                // Yes/No radio
                 $yesChecked = ($value === 'yes') ? 'checked' : '';
                 $noChecked = ($value === 'no') ? 'checked' : '';
                 ?>
@@ -355,8 +313,7 @@ function cpp_wizard_render_step($steps, $current_step, $caf_plan_id)
                 <label style="margin-left:1em;"><input type="radio" name="<?php echo esc_attr($name); ?>" value="no" <?php echo $noChecked; ?>> No</label>
                 <?php
             } elseif ($type === 'checkbox-benefits') {
-                // Multiple checkboxes
-                $selectedVals = explode(',', $value); // stored as comma separated string
+                $selectedVals = explode(',', $value);
                 $allOptions = ['Medical', 'Dental', 'Vision', 'Life'];
                 foreach ($allOptions as $opt) {
                     $checked = in_array($opt, $selectedVals) ? 'checked' : '';
@@ -367,13 +324,24 @@ function cpp_wizard_render_step($steps, $current_step, $caf_plan_id)
                     </label>
                     <?php
                 }
+            } elseif ($type === 'checkbox-multi') {
+                $selectedVals = explode(',', $value);
+                foreach ($field['options'] as $option) {
+                    $checked = in_array($option, $selectedVals) ? 'checked' : '';
+                    ?>
+                    <label style="display:block; margin-bottom: 0.5em;">
+                        <input type="checkbox" name="<?php echo esc_attr($name); ?>[]" value="<?php echo esc_attr($option); ?>" <?php echo $checked; ?>>
+                        <?php echo esc_html($option); ?>
+                    </label>
+                    <?php
+                }
             } else {
-                // Basic text input or date
                 ?>
                 <input type="<?php echo esc_attr($type); ?>" name="<?php echo esc_attr($name); ?>"
                     value="<?php echo esc_attr($value); ?>">
                 <?php
             }
+
 
             echo '</div>';
         endforeach;
@@ -386,6 +354,58 @@ function cpp_wizard_render_step($steps, $current_step, $caf_plan_id)
     <?php
 }
 
+function cpp_build_intro_header($company_name, $effective_date, $plan_options_selected)
+{
+    $component_titles = [
+        'Pre-Tax Premiums' => 'PREMIUM PAYMENT ARRANGEMENT',
+        'Health Savings Account (HSA)' => 'HEALTH SAVINGS ACCOUNT',
+        'Health Flexible Spending Account (Health FSA)' => 'HEALTH FLEXIBLE SPENDING ARRANGEMENT',
+        'Dependent Care Account' => 'DEPENDENT CARE ASSISTANCE PLAN',
+    ];
+
+    $components = [];
+    foreach ($plan_options_selected as $option) {
+        $option = trim($option);
+        if (isset($component_titles[$option])) {
+            $components[] = $component_titles[$option];
+        }
+    }
+
+    // Start of intro page
+    $header_html = '<div style="page-break-after: always;">';
+
+    // Company/Cover Page Heading
+    $header_html .= '<div style="text-align: center; font-family: Times New Roman; font-size: 12pt; font-weight: bold; margin-top: 120pt;">'
+        . strtoupper($company_name) . '</div>';
+
+    // Intro Title Line
+    $header_html .= '<div style="text-align: center; font-family: Times New Roman; font-size: 12pt; font-weight: normal; margin-top: 24pt;">'
+        . 'CAFETERIA PLAN WITH</div>';
+
+    // Component Lines
+    $count = count($components);
+    foreach ($components as $i => $comp) {
+        $header_html .= '<div style="text-align: center; font-family: Times New Roman; font-size: 12pt; text-transform: uppercase; margin-top: 6pt;">' . $comp . '</div>';
+        if ($count > 1 && $i === $count - 2) {
+            $header_html .= '<div style="text-align: center; font-family: Times New Roman; font-size: 12pt; margin-top: 6pt;">AND</div>';
+        }
+    }
+
+    // Final line: "COMPONENTS"
+    $header_html .= '<div style="text-align: center; font-family: Times New Roman; font-size: 12pt; margin-top: 12pt;">COMPONENTS</div>';
+
+    // Footer date line
+    $header_html .= '<div style="text-align: center; font-family: Times New Roman; font-size: 12pt; font-weight: bold; margin-top: 36pt;">'
+        . 'As Amended and Restated ' . esc_html($effective_date) . '</div>';
+
+    // Close page
+    $header_html .= '</div>';
+
+    return $header_html;
+}
+
+
+
 /**
  * 11) Render Preview step
  */
@@ -393,7 +413,6 @@ function cpp_wizard_render_preview_step($caf_plan_id)
 {
     ?>
     <h2>Preview Cafeteria Plan</h2>
-    <p>This is an HTML preview of the final PDF.</p>
 
 
     <style>
@@ -435,6 +454,16 @@ function cpp_wizard_render_preview_step($caf_plan_id)
         .pdf-preview-wrapper p {
             margin: 0 0 12pt 0;
         }
+
+        .intro-page {
+            page-break-after: always;
+            padding-top: 120pt;
+            margin-bottom: 120pt;
+        }
+
+        .intro-page div {
+            margin-top: 12pt;
+        }
     </style>
     <div class="pdf-preview-wrapper">
 
@@ -455,34 +484,32 @@ function cpp_wizard_render_preview_step($caf_plan_id)
         $benefits_arr = array_filter(explode(',', $benefits_str));
 
         ?>
-        <h1>Cafeteria Plan</h1>
-        <p><strong>Company:</strong> <?php echo $company_name; ?></p>
-        <p><strong>Effective Date:</strong> <?php echo $effective_date; ?></p>
-        <p><strong>Plan Details:</strong><br><?php echo nl2br($plan_details); ?></p>
+        <div class="intro-page">
+            <?php
+            $plan_options_selected_str = get_post_meta($caf_plan_id, '_cpp_plan_options', true);
+            $plan_options_selected = array_filter(explode(',', $plan_options_selected_str));
+            echo cpp_build_intro_header($company_name, $effective_date, $plan_options_selected);
+            ?>
+        </div>
 
-        <?php if ($include_cobra === 'yes'): ?>
-            <h3>COBRA Coverage</h3>
-            <p>This plan will include COBRA coverage clauses for eligible employees.</p>
-        <?php endif; ?>
+        <?php
+        $plan_options_selected_str = get_post_meta($caf_plan_id, '_cpp_plan_options', true);
+        $plan_options_selected = array_filter(explode(',', $plan_options_selected_str));
 
-        <?php if ($include_fsa === 'yes'): ?>
-            <h3>Flexible Spending Account (FSA)</h3>
-            <p>Your cafeteria plan will contain FSA provisions for medical expenses, as appropriate.</p>
-        <?php endif; ?>
+        $plan_text_blocks = [
+            'Pre-Tax Premiums' => '<h3>Pre-Tax Premiums</h3><p>The Premium Payment Plan allows employees to pay their share of premiums for medical, dental, or vision coverage on a pre-tax basis.</p>',
+            'Health Flexible Spending Account (Health FSA)' => '<h3>Health Flexible Spending Account (Health FSA)</h3><p>The Health Flexible Spending Arrangement (Health FSA) reimburses eligible medical expenses, including dental and vision care, using pre-tax dollars.</p>',
+            'Health Savings Account (HSA)' => '<h3>Health Savings Account (HSA)</h3><p>Employees may elect to contribute to a Health Savings Account (HSA), which allows tax-free contributions, growth, and withdrawals for qualified medical expenses.</p>',
+            'Dependent Care Account' => '<h3>Dependent Care Account</h3><p>The Dependent Care Assistance Plan (Dependent Care FSA) reimburses qualifying child and dependent care costs to enable employees to work or seek employment.</p>',
+        ];
 
-        <?php if (!empty($benefits_arr)): ?>
-            <h3>Included Benefits</h3>
-            <ul>
-                <?php foreach ($benefits_arr as $b): ?>
-                    <li><?php echo esc_html($b); ?> coverage included.</li>
-                <?php endforeach; ?>
-            </ul>
-        <?php endif; ?>
-
-        <?php if (!empty($special_req)): ?>
-            <h3>Special Eligibility Requirements</h3>
-            <p><?php echo nl2br($special_req); ?></p>
-        <?php endif; ?>
+        foreach ($plan_options_selected as $option) {
+            $option = trim($option);
+            if (isset($plan_text_blocks[$option])) {
+                echo $plan_text_blocks[$option];
+            }
+        }
+        ?>
     </div>
 
     <?php if ($caf_plan_id): ?>
@@ -577,60 +604,43 @@ function cpp_wizard_generate_pdf($caf_plan_id)
     }
 </style>
 ';
+    $plan_options_selected_str = get_post_meta($caf_plan_id, '_cpp_plan_options', true);
+    $plan_options_selected = array_filter(explode(',', $plan_options_selected_str));
+    $html .= cpp_build_intro_header($company_name, $effective_date, $plan_options_selected);
 
-    $html .= '<div class="header-area">
-        <h1>Cafeteria Plan</h1>
-        <p style="margin:5px 0;"><strong>Company:</strong> ' . $company_name . '</p>
-        <p><strong>Effective Date:</strong> ' . $effective_date . '</p>
-    </div>';
 
     $html .= '<hr>';
 
-    // Main content
-    $html .= '<h2>Plan Details</h2>';
-    $html .= '<p>' . nl2br($plan_details) . '</p>';
-
-    // COBRA example
-    if ($include_cobra === 'yes') {
-        // If we had "COBRA" in library, we can add that:
-        foreach ($library as $paragraph) {
-            if ($paragraph['trigger'] === 'include_cobra') {
-                $html .= '<h3>' . esc_html($paragraph['title']) . '</h3>';
-                $html .= '<p>' . esc_html($paragraph['body']) . '</p>';
-            }
-        }
-    }
-
-    // FSA
-    if ($include_fsa === 'yes') {
-        $html .= '<h3>Flexible Spending Account (FSA)</h3>';
-        $html .= '<p>Under this cafeteria plan, participants can elect to contribute a portion of their earnings to cover certain medical or dependent care expenses, as specified by IRS guidelines.</p>';
-    }
-
-    // Benefits
-    if (!empty($benefits_arr)) {
-        $html .= '<h3>Included Benefits</h3><ul>';
-        foreach ($benefits_arr as $b) {
-            $html .= '<li>' . esc_html($b) . ' coverage included</li>';
-        }
-        $html .= '</ul>';
-    }
-
-    // Special Requirements
-    if (!empty($special_req)) {
-        $html .= '<h3>Special Eligibility Requirements</h3>';
-        $html .= '<p>' . nl2br($special_req) . '</p>';
-    }
-
-    // Footer
-    $html .= '<div class="footer-area">
-        <p>This Cafeteria Plan Document is provided for demonstration purposes.</p>
-        <p>&copy; ' . date('Y') . ' Your Company. All rights reserved.</p>
-    </div>';
 
     error_log('DEBUG: HTML for PDF => ' . $html);
 
     try {
+
+
+        // Prepare dynamic text based on Plan Options
+        $plan_options_selected_str = get_post_meta($caf_plan_id, '_cpp_plan_options', true);
+        $plan_options_selected = array_filter(explode(',', $plan_options_selected_str));
+
+        $plan_text_blocks = [
+            'Pre-Tax Premiums' => '<h3>Pre-Tax Premiums</h3><p>The Premium Payment Plan allows employees to pay their share of premiums for medical, dental, or vision coverage on a pre-tax basis.</p>',
+            'Health Flexible Spending Account (Health FSA)' => '<h3>Health Flexible Spending Account (Health FSA)</h3><p>The Health Flexible Spending Arrangement (Health FSA) reimburses eligible medical expenses, including dental and vision care, using pre-tax dollars.</p>',
+            'Health Savings Account (HSA)' => '<h3>Health Savings Account (HSA)</h3><p>Employees may elect to contribute to a Health Savings Account (HSA), which allows tax-free contributions, growth, and withdrawals for qualified medical expenses.</p>',
+            'Dependent Care Account' => '<h3>Dependent Care Account</h3><p>The Dependent Care Assistance Plan (Dependent Care FSA) reimburses qualifying child and dependent care costs to enable employees to work or seek employment.</p>',
+        ];
+
+        foreach ($plan_options_selected as $option) {
+            $option = trim($option);
+            if (isset($plan_text_blocks[$option])) {
+                $html .= $plan_text_blocks[$option];
+            }
+        }
+
+        // Footer
+        $html .= '<div class="footer-area">
+        <p>This Cafeteria Plan Document is provided for demonstration purposes.</p>
+        <p>&copy; ' . date('Y') . ' Your Company. All rights reserved.</p>
+        </div>';
+
         $dompdf->loadHtml($html);
         $dompdf->setPaper('A4', 'portrait');
         $dompdf->render();
