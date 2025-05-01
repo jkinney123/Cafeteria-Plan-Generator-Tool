@@ -90,7 +90,7 @@ function cpp_get_wizard_steps()
     return [
         1 => [
             'slug' => 'demographics',
-            'title' => 'Demographics',
+            'title' => '1. Demographics',
             'fields' => [
                 [
                     'type' => 'text',
@@ -106,7 +106,7 @@ function cpp_get_wizard_steps()
         ],
         2 => [
             'slug' => 'plan-options',
-            'title' => 'Plan Options',
+            'title' => '2. Plan Options',
             'fields' => [
                 [
                     'type' => 'checkbox-multi',
@@ -123,7 +123,7 @@ function cpp_get_wizard_steps()
         ],
         3 => [
             'slug' => 'preview',
-            'title' => 'Preview & Generate',
+            'title' => '3. Preview & Generate',
             'fields' => [],
         ],
     ];
@@ -168,28 +168,93 @@ function cpp_wizard_shortcode()
 
     ob_start();
     ?>
-    <div class="cpp-wizard-container" style="display: flex;">
+    <style>
+        .cpp-wizard-container {
+            display: flex;
+        }
+
+        .cpp-wizard-sidebar {
+            position: sticky;
+            top: 50px;
+            /* adjust as needed depending on your site’s header height */
+            align-self: flex-start;
+            z-index: 10;
+            width: 243px;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+
+        .cpp-wizard-nav-menu {
+            background-color: #dfedf8;
+            border: groove;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            border-radius: 2px;
+            overflow-y: auto;
+            max-width: 93%;
+            max-height: 860px;
+            font-family: "Source Serif Pro", sans-serif;
+            font-size: 15px;
+        }
+
+        .cpp-wizard-nav-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .cpp-wizard-nav-item {
+            padding-bottom: 0;
+            margin-bottom: 0;
+            box-sizing: border-box;
+            display: block;
+            position: relative;
+            color: rgb(75, 79, 88);
+        }
+
+        .cpp-wizard-nav-item button {
+            display: block;
+            width: 100%;
+            height: 100%;
+            padding: 13px 13px;
+            background-color: transparent;
+            border: none;
+            font-size: 15px;
+            font-weight: 700;
+            font-family: "Source Serif Pro", sans-serif;
+            color: rgb(75, 79, 88);
+            text-align: left;
+            cursor: pointer;
+            transition: all 0.2s linear;
+            text-decoration: none;
+            outline: none;
+            border-bottom: 0.6667px solid rgb(75, 79, 88);
+        }
+
+        .cpp-wizard-nav-item.active button {
+            background-color: #3f444b;
+            color: white;
+            font-weight: 700;
+            font-family: "Source Serif Pro", sans-serif;
+        }
+    </style>
+    <div class="cpp-wizard-container">
         <!-- Sidebar -->
-        <div class="cpp-wizard-sidebar"
-            style="width: 200px; margin-right: 20px; border-right: 1px solid #ccc; padding-right:10px;">
-            <h3>Cafeteria Plan Steps</h3>
-            <ul style="list-style:none; padding-left:0;">
-                <?php foreach ($steps as $stepIndex => $info):
-                    $isActive = ($stepIndex == $current_step);
-                    ?>
-                    <li style="margin-bottom:5px;">
-                        <form method="post" style="display:inline;">
-                            <input type="hidden" name="cafeteria_plan_id" value="<?php echo esc_attr($caf_plan_id); ?>" />
-                            <input type="hidden" name="current_step" value="<?php echo $stepIndex; ?>" />
-                            <button type="submit"
-                                style="<?php echo $isActive ? 'font-weight:bold;' : ''; ?> background:none; border:none; cursor:pointer; text-align:left; padding:0;">
-                                <?php echo $stepIndex . '. ' . esc_html($info['title']); ?>
-                            </button>
-                        </form>
-                    </li>
-                <?php endforeach; ?>
-            </ul>
+        <div class="cpp-wizard-sidebar">
+            <nav class="cpp-wizard-nav-menu">
+                <ul class="cpp-wizard-nav-list">
+                    <?php foreach ($steps as $stepIndex => $info): ?>
+                        <li class="cpp-wizard-nav-item <?php echo ($stepIndex == $current_step) ? 'active' : ''; ?>">
+                            <form method="post">
+                                <input type="hidden" name="cafeteria_plan_id" value="<?php echo esc_attr($caf_plan_id); ?>" />
+                                <input type="hidden" name="current_step" value="<?php echo $stepIndex; ?>" />
+                                <button type="submit"><?php echo esc_html($info['title']); ?></button>
+                            </form>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            </nav>
         </div>
+
 
         <!-- Main content -->
         <div class="cpp-wizard-main" style="flex:1;">
@@ -455,9 +520,9 @@ function cpp_wizard_render_preview_step($caf_plan_id)
             margin: 0 0 12pt 0;
         }
 
+
         .intro-page {
             page-break-after: always;
-            padding-top: 120pt;
             margin-bottom: 120pt;
         }
 
