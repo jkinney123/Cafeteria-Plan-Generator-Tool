@@ -154,6 +154,32 @@ function cpp_load_plan_library()
     ];
 }
 
+function cpp_get_template_versions()
+{
+    return [
+        'v1' => [
+            'label' => 'Version 1 (2025)',
+            'components' => [
+                'Pre-Tax Premiums' => '<h3>Pre-Tax Premiums</h3><p>The Premium Payment Plan allows employees to pay their share of premiums for medical, dental, or vision coverage on a pre-tax basis.</p>',
+                'Health Flexible Spending Account (Health FSA)' => '<h3>Health Flexible Spending Account (Health FSA)</h3><p>The Health Flexible Spending Arrangement (Health FSA) reimburses eligible medical expenses, including dental and vision care, using pre-tax dollars.</p>',
+                'Health Savings Account (HSA)' => '<h3>Health Savings Account (HSA)</h3><p>Employees may elect to contribute to a Health Savings Account (HSA), which allows tax-free contributions, growth, and withdrawals for qualified medical expenses.</p>',
+                'Dependent Care Account' => '<h3>Dependent Care Account</h3><p>The Dependent Care Assistance Plan (Dependent Care FSA) reimburses qualifying child and dependent care costs to enable employees to work or seek employment.</p>',
+            ]
+        ],
+        // Add future versions here
+        'v2' => [
+            'label' => 'Version 2 (2026)',
+            'components' => [
+                'Pre-Tax Premiums' => '<h3>Pre-Tax Premiums</h3><p>Updated details about pre-tax premiums...</p>',
+                'Health Flexible Spending Account (Health FSA)' => '<h3>Health Flexible Spending Account (Health FSA)</h3><p>Updated details about Health FSA...</p>',
+                'Health Savings Account (HSA)' => '<h3>Health Savings Account (HSA)</h3><p>Updated details about HSA...</p>',
+                'Dependent Care Account' => '<h3>Dependent Care Account</h3><p>Updated details about Dependent Care Account...</p>',
+            ]
+        ],
+    ];
+}
+
+
 /**
  * 8) Main shortcode [cafeteria_plan_form_wizard]
  */
@@ -292,6 +318,12 @@ function cpp_wizard_process_form($steps, &$current_step, &$caf_plan_id)
                 'post_status' => 'draft',
             ]);
         }
+
+        // Lock in template version when plan is first created
+        if (!get_post_meta($caf_plan_id, '_cpp_template_version', true)) {
+            update_post_meta($caf_plan_id, '_cpp_template_version', 'v1');
+        }
+
 
         if (isset($steps[$submittedStep])) {
             foreach ($steps[$submittedStep]['fields'] as $field) {
@@ -561,12 +593,10 @@ function cpp_wizard_render_preview_step($caf_plan_id)
         $plan_options_selected_str = get_post_meta($caf_plan_id, '_cpp_plan_options', true);
         $plan_options_selected = array_filter(explode(',', $plan_options_selected_str));
 
-        $plan_text_blocks = [
-            'Pre-Tax Premiums' => '<h3>Pre-Tax Premiums</h3><p>The Premium Payment Plan allows employees to pay their share of premiums for medical, dental, or vision coverage on a pre-tax basis.</p>',
-            'Health Flexible Spending Account (Health FSA)' => '<h3>Health Flexible Spending Account (Health FSA)</h3><p>The Health Flexible Spending Arrangement (Health FSA) reimburses eligible medical expenses, including dental and vision care, using pre-tax dollars.</p>',
-            'Health Savings Account (HSA)' => '<h3>Health Savings Account (HSA)</h3><p>Employees may elect to contribute to a Health Savings Account (HSA), which allows tax-free contributions, growth, and withdrawals for qualified medical expenses.</p>',
-            'Dependent Care Account' => '<h3>Dependent Care Account</h3><p>The Dependent Care Assistance Plan (Dependent Care FSA) reimburses qualifying child and dependent care costs to enable employees to work or seek employment.</p>',
-        ];
+        $template_version = get_post_meta($caf_plan_id, '_cpp_template_version', true) ?: 'v1';
+        $template_data = cpp_get_template_versions();
+        $plan_text_blocks = $template_data[$template_version]['components'] ?? [];
+
 
         foreach ($plan_options_selected as $option) {
             $option = trim($option);
@@ -686,12 +716,10 @@ function cpp_wizard_generate_pdf($caf_plan_id)
         $plan_options_selected_str = get_post_meta($caf_plan_id, '_cpp_plan_options', true);
         $plan_options_selected = array_filter(explode(',', $plan_options_selected_str));
 
-        $plan_text_blocks = [
-            'Pre-Tax Premiums' => '<h3>Pre-Tax Premiums</h3><p>The Premium Payment Plan allows employees to pay their share of premiums for medical, dental, or vision coverage on a pre-tax basis.</p>',
-            'Health Flexible Spending Account (Health FSA)' => '<h3>Health Flexible Spending Account (Health FSA)</h3><p>The Health Flexible Spending Arrangement (Health FSA) reimburses eligible medical expenses, including dental and vision care, using pre-tax dollars.</p>',
-            'Health Savings Account (HSA)' => '<h3>Health Savings Account (HSA)</h3><p>Employees may elect to contribute to a Health Savings Account (HSA), which allows tax-free contributions, growth, and withdrawals for qualified medical expenses.</p>',
-            'Dependent Care Account' => '<h3>Dependent Care Account</h3><p>The Dependent Care Assistance Plan (Dependent Care FSA) reimburses qualifying child and dependent care costs to enable employees to work or seek employment.</p>',
-        ];
+        $template_version = get_post_meta($caf_plan_id, '_cpp_template_version', true) ?: 'v1';
+        $template_data = cpp_get_template_versions();
+        $plan_text_blocks = $template_data[$template_version]['components'] ?? [];
+
 
         foreach ($plan_options_selected as $option) {
             $option = trim($option);
@@ -699,6 +727,8 @@ function cpp_wizard_generate_pdf($caf_plan_id)
                 $html .= $plan_text_blocks[$option];
             }
         }
+
+        $html .= '<p style="text-align:right; font-size:10pt;"><em>Template Version: ' . esc_html($template_version) . '</em></p>';
 
         // Footer
         $html .= '<div class="footer-area">
@@ -725,6 +755,57 @@ function cpp_wizard_generate_pdf($caf_plan_id)
     }
     exit;
 }
+
+function cpp_render_plan_dashboard()
+{
+    if (!is_user_logged_in()) {
+        return '<p>Please log in to view your cafeteria plans.</p>';
+    }
+
+    $user_id = get_current_user_id();
+    $plans = get_posts([
+        'post_type' => 'cafeteria_plan',
+        'post_status' => ['draft', 'publish'],
+        'numberposts' => -1,
+        'author' => $user_id,
+        'orderby' => 'date',
+        'order' => 'DESC',
+    ]);
+
+    if (empty($plans)) {
+        return '<p>You have not created any cafeteria plans yet.</p>';
+    }
+
+    ob_start();
+    echo '<h2>My Cafeteria Plans</h2>';
+    echo '<table class="cpp-plan-dashboard" style="width:100%; border-collapse: collapse; margin-top: 20px;">';
+    echo '<thead><tr>
+        <th style="border-bottom: 1px solid #ccc; padding: 8px;">Plan Title</th>
+        <th style="border-bottom: 1px solid #ccc; padding: 8px;">Template Version</th>
+        <th style="border-bottom: 1px solid #ccc; padding: 8px;">Date Created</th>
+        <th style="border-bottom: 1px solid #ccc; padding: 8px;">Actions</th>
+    </tr></thead><tbody>';
+
+    foreach ($plans as $plan) {
+        $version = get_post_meta($plan->ID, '_cpp_template_version', true) ?: 'v1';
+        $date = get_the_date('', $plan->ID);
+        $download_url = esc_url(add_query_arg(['caf_plan_pdf' => 1, 'plan_id' => $plan->ID], home_url('/')));
+
+        echo '<tr>';
+        echo '<td style="padding: 8px;">' . esc_html($plan->post_title) . '</td>';
+        echo '<td style="padding: 8px;">' . esc_html($version) . '</td>';
+        echo '<td style="padding: 8px;">' . esc_html($date) . '</td>';
+        echo '<td style="padding: 8px;">
+            <a href="' . $download_url . '" class="button" target="_blank">Download PDF</a>
+        </td>';
+        echo '</tr>';
+    }
+
+    echo '</tbody></table>';
+    return ob_get_clean();
+}
+add_shortcode('cafeteria_plan_dashboard', 'cpp_render_plan_dashboard');
+
 
 /**
  * 13) Log template_redirect (optional debug)
