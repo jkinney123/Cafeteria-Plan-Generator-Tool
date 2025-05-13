@@ -64,7 +64,7 @@ add_action('init', function () {
  */
 function cpp_wizard_skip_cache()
 {
-    if (is_page('cafeteria-plan-generator')) {
+    if (is_page('generator-wizard')) {
         define('DONOTCACHEPAGE', true);
     }
 }
@@ -186,7 +186,21 @@ function cpp_get_template_versions()
 function cpp_wizard_shortcode()
 {
     $current_step = isset($_POST['current_step']) ? intval($_POST['current_step']) : 1;
-    $caf_plan_id = isset($_POST['cafeteria_plan_id']) ? intval($_POST['cafeteria_plan_id']) : 0;
+    if (isset($_POST['cafeteria_plan_id'])) {
+        $caf_plan_id = intval($_POST['cafeteria_plan_id']);
+    } elseif (isset($_GET['cafeteria_plan_id'])) {
+        $caf_plan_id = intval($_GET['cafeteria_plan_id']);
+    } else {
+        $caf_plan_id = 0;
+    }
+
+    if ($caf_plan_id) {
+        $author_id = (int) get_post_field('post_author', $caf_plan_id);
+        if ($author_id !== get_current_user_id()) {
+            return '<p>You do not have permission to edit this plan.</p>';
+        }
+    }
+    // Check if the user is logged in    
 
     $steps = cpp_get_wizard_steps();
 
@@ -263,9 +277,26 @@ function cpp_wizard_shortcode()
             font-family: "Source Serif Pro", sans-serif;
         }
     </style>
+    <?php if ($caf_plan_id): ?>
+        <div style="margin-bottom: 20px; padding: 10px; background: #f3f3f3; border: 1px solid #ccc;">
+            <?php
+            $post = get_post($caf_plan_id);
+            $version = get_post_meta($caf_plan_id, '_cpp_template_version', true) ?: 'v1';
+            $last_edited = get_post_meta($caf_plan_id, '_cpp_last_edited', true);
+            echo '<strong>Plan:</strong> ' . esc_html($post->post_title) . '<br>';
+            echo '<strong>Version:</strong> ' . esc_html($version) . '<br>';
+            echo '<strong>Author:</strong> ' . esc_html(get_the_author_meta('display_name', $post->post_author)) . '<br>';
+            echo '<strong>Last Edited:</strong> ' . esc_html($last_edited);
+            ?>
+        </div>
+    <?php endif; ?>
+
     <div class="cpp-wizard-container">
         <!-- Sidebar -->
         <div class="cpp-wizard-sidebar">
+            <div style="margin-bottom: 15px;">
+                <a href="/user-dashboard/" class="button">← View My Cafeteria Plans</a>
+            </div>
             <nav class="cpp-wizard-nav-menu">
                 <ul class="cpp-wizard-nav-list">
                     <?php foreach ($steps as $stepIndex => $info): ?>
@@ -280,6 +311,7 @@ function cpp_wizard_shortcode()
                 </ul>
             </nav>
         </div>
+
 
 
         <!-- Main content -->
@@ -351,6 +383,9 @@ function cpp_wizard_process_form($steps, &$current_step, &$caf_plan_id)
                     update_post_meta($caf_plan_id, '_cpp_' . $name, '');
                 }
             }
+            update_post_meta($caf_plan_id, '_cpp_last_edited', current_time('mysql'));
+            update_post_meta($caf_plan_id, '_cpp_status', 'Draft'); // or change to 'In Progress', etc.
+
         }
 
         // Move to next step if not final
@@ -732,8 +767,7 @@ function cpp_wizard_generate_pdf($caf_plan_id)
 
         // Footer
         $html .= '<div class="footer-area">
-        <p>This Cafeteria Plan Document is provided for demonstration purposes.</p>
-        <p>&copy; ' . date('Y') . ' Your Company. All rights reserved.</p>
+        <p>&copy; ' . date('Y') . '  Kinney Law & Compliance. All rights reserved.</p>
         </div>';
 
         $dompdf->loadHtml($html);
@@ -763,13 +797,14 @@ function cpp_render_plan_dashboard()
     }
 
     $user_id = get_current_user_id();
+    $order = isset($_GET['sort_order']) && in_array($_GET['sort_order'], ['ASC', 'DESC']) ? $_GET['sort_order'] : 'DESC';
     $plans = get_posts([
         'post_type' => 'cafeteria_plan',
         'post_status' => ['draft', 'publish'],
         'numberposts' => -1,
         'author' => $user_id,
         'orderby' => 'date',
-        'order' => 'DESC',
+        'order' => $order,
     ]);
 
     if (empty($plans)) {
@@ -777,26 +812,81 @@ function cpp_render_plan_dashboard()
     }
 
     ob_start();
+    // 🔽 Insert filter form here:
+    ?>
+    <form method="get" style="margin-bottom: 20px;">
+        <label>Filter by Version:
+            <select name="filter_version">
+                <option value="">All</option>
+                <?php foreach (cpp_get_template_versions() as $vKey => $vData): ?>
+                    <option value="<?php echo esc_attr($vKey); ?>" <?php selected($_GET['filter_version'] ?? '', $vKey); ?>>
+                        <?php echo esc_html($vKey); ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </label>
+        <label style="margin-left:15px;">Status:
+            <select name="filter_status">
+                <option value="">All</option>
+                <option value="Draft" <?php selected($_GET['filter_status'] ?? '', 'Draft'); ?>>Draft</option>
+                <option value="Finalized" <?php selected($_GET['filter_status'] ?? '', 'Finalized'); ?>>Finalized</option>
+            </select>
+        </label>
+        <label style="margin-left:15px;">Sort by:
+            <select name="sort_order">
+                <option value="DESC" <?php selected($_GET['sort_order'] ?? '', 'DESC'); ?>>Newest First</option>
+                <option value="ASC" <?php selected($_GET['sort_order'] ?? '', 'ASC'); ?>>Oldest First</option>
+            </select>
+        </label>
+
+        <input type="submit" value="Apply Filters" class="button" style="margin-left:10px;">
+    </form>
+    <?php
     echo '<h2>My Cafeteria Plans</h2>';
     echo '<table class="cpp-plan-dashboard" style="width:100%; border-collapse: collapse; margin-top: 20px;">';
     echo '<thead><tr>
         <th style="border-bottom: 1px solid #ccc; padding: 8px;">Plan Title</th>
         <th style="border-bottom: 1px solid #ccc; padding: 8px;">Template Version</th>
         <th style="border-bottom: 1px solid #ccc; padding: 8px;">Date Created</th>
+        <th style="border-bottom: 1px solid #ccc; padding: 8px;">Last Edited</th>
+        <th style="border-bottom: 1px solid #ccc; padding: 8px;">Status</th>
         <th style="border-bottom: 1px solid #ccc; padding: 8px;">Actions</th>
     </tr></thead><tbody>';
 
     foreach ($plans as $plan) {
         $version = get_post_meta($plan->ID, '_cpp_template_version', true) ?: 'v1';
+        $template_versions = cpp_get_template_versions();
+        $latest_version = array_key_last($template_versions);
+        $is_outdated = version_compare($version, $latest_version, '<');
         $date = get_the_date('', $plan->ID);
+        $last_edited = get_post_meta($plan->ID, '_cpp_last_edited', true);
+        $status = get_post_meta($plan->ID, '_cpp_status', true) ?: 'Draft';
+
+        if (!empty($_GET['filter_version']) && $_GET['filter_version'] !== $version) {
+            continue;
+        }
+        if (!empty($_GET['filter_status']) && $_GET['filter_status'] !== $status) {
+            continue;
+        }
+
         $download_url = esc_url(add_query_arg(['caf_plan_pdf' => 1, 'plan_id' => $plan->ID], home_url('/')));
+        $edit_url = esc_url(add_query_arg(['cafeteria_plan_id' => $plan->ID], home_url('generator-wizard'))); // adjust URL to your wizard page
+
 
         echo '<tr>';
         echo '<td style="padding: 8px;">' . esc_html($plan->post_title) . '</td>';
-        echo '<td style="padding: 8px;">' . esc_html($version) . '</td>';
+        echo '<td style="padding: 8px;">' . esc_html($version);
+        if ($is_outdated) {
+            echo ' <span style="color:red; font-weight:bold;">⚠ Outdated</span>';
+        }
+        echo '</td>';
+
         echo '<td style="padding: 8px;">' . esc_html($date) . '</td>';
+        echo '<td style="padding: 8px;">' . esc_html($last_edited) . '</td>';
+        echo '<td style="padding: 8px;">' . esc_html($status) . '</td>';
         echo '<td style="padding: 8px;">
             <a href="' . $download_url . '" class="button" target="_blank">Download PDF</a>
+            <a href="' . $edit_url . '" class="button" style="margin-left:10px;">Edit</a>
         </td>';
         echo '</tr>';
     }
