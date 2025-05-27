@@ -10,8 +10,10 @@ if (!defined('ABSPATH')) {
     exit; // Prevent direct access
 }
 
+
 require_once __DIR__ . '/vendor/autoload.php';
 use Dompdf\Dompdf;
+use Jfcherng\Diff\DiffHelper;
 
 
 // Register the Custom Post Type
@@ -58,6 +60,43 @@ add_action('init', function () {
         cpp_wizard_generate_pdf($plan_id);
     }
 });
+
+add_action('init', function () {
+    if (isset($_GET['cpp_pdf_redirect']) && !empty($_GET['plan_id'])) {
+        $plan_id = (int) $_GET['plan_id'];
+
+        // Build URL to download PDF directly
+        $pdf_url = add_query_arg([
+            'caf_plan_pdf' => 1,
+            'plan_id' => $plan_id
+        ], home_url('/'));
+
+        // Output HTML with JS redirect after triggering PDF
+        ?>
+        <html>
+
+        <head>
+            <title>Redirecting...</title>
+        </head>
+
+        <body>
+            <script>
+                window.onload = function () {
+                    window.open("<?php echo esc_url_raw($pdf_url); ?>", "_blank");
+                    setTimeout(function () {
+                        window.location.href = "<?php echo esc_url(home_url('/user-dashboard')); ?>";
+                    }, 1000);
+                };
+            </script>
+            <p>Generating your PDF...</p>
+        </body>
+
+        </html>
+        <?php
+        exit;
+    }
+});
+
 
 /**
  * 4) Optional: Skip cache
@@ -160,7 +199,7 @@ function cpp_get_template_versions()
         'v1' => [
             'label' => 'Version 1 (2025)',
             'components' => [
-                'Pre-Tax Premiums' => '<h3>Pre-Tax Premiums</h3><p>The Premium Payment Plan allows employees to pay their share of premiums for medical, dental, or vision coverage on a pre-tax basis.</p>',
+                'Pre-Tax Premiums' => '<h3>Pre-Tax Premiums</h3><p>The Premium Payment Plan allows employees to pay their share of premiums for medical, dental, or vision coverage on a pre-tax basis. <span class="cpp-template" data-key="Pre-Tax_Premiums">Up to $3,000/year</span>.</p>',
                 'Health Flexible Spending Account (Health FSA)' => '<h3>Health Flexible Spending Account (Health FSA)</h3><p>The Health Flexible Spending Arrangement (Health FSA) reimburses eligible medical expenses, including dental and vision care, using pre-tax dollars.</p>',
                 'Health Savings Account (HSA)' => '<h3>Health Savings Account (HSA)</h3><p>Employees may elect to contribute to a Health Savings Account (HSA), which allows tax-free contributions, growth, and withdrawals for qualified medical expenses.</p>',
                 'Dependent Care Account' => '<h3>Dependent Care Account</h3><p>The Dependent Care Assistance Plan (Dependent Care FSA) reimburses qualifying child and dependent care costs to enable employees to work or seek employment.</p>',
@@ -170,7 +209,7 @@ function cpp_get_template_versions()
         'v2' => [
             'label' => 'Version 2 (2026)',
             'components' => [
-                'Pre-Tax Premiums' => '<h3>Pre-Tax Premiums</h3><p>Updated details about pre-tax premiums...</p>',
+                'Pre-Tax Premiums' => '<h3>Pre-Tax Premiums</h3><p>The Premium Payment Plan allows employees to pay their share of premiums for medical, dental, or vision coverage on a pre-tax basis. <span class="cpp-template" data-key="Pre-Tax_Premiums">Up to $3,500/year and is portable</span>.</p>',
                 'Health Flexible Spending Account (Health FSA)' => '<h3>Health Flexible Spending Account (Health FSA)</h3><p>Updated details about Health FSA...</p>',
                 'Health Savings Account (HSA)' => '<h3>Health Savings Account (HSA)</h3><p>Updated details about HSA...</p>',
                 'Dependent Care Account' => '<h3>Dependent Care Account</h3><p>Updated details about Dependent Care Account...</p>',
@@ -200,6 +239,59 @@ function cpp_wizard_shortcode()
             return '<p>You do not have permission to edit this plan.</p>';
         }
     }
+
+    if ($caf_plan_id && !isset($_GET['cpp_pdf_redirect'])) {
+        $current_status = get_post_meta($caf_plan_id, '_cpp_status', true);
+        if ($current_status === 'Finalized') {
+            update_post_meta($caf_plan_id, '_cpp_status', 'Editing');
+            update_post_meta($caf_plan_id, '_cpp_last_edited', current_time('mysql'));
+        }
+    }
+
+
+
+    /* if (isset($_GET['upgrade_plan_id']) && is_numeric($_GET['upgrade_plan_id'])) {
+        $old_id = intval($_GET['upgrade_plan_id']);
+        $author_id = (int) get_post_field('post_author', $old_id);
+
+        if ($author_id === get_current_user_id()) {
+            // Clone logic
+            $new_id = wp_insert_post([
+                'post_type' => 'cafeteria_plan',
+                'post_title' => 'Upgraded Plan - ' . current_time('mysql'),
+                'post_status' => 'draft',
+                'post_author' => $author_id,
+            ]);
+
+            // Copy meta (except for version and status)
+            $exclude_keys = ['_cpp_status', '_cpp_template_version'];
+            $meta = get_post_meta($old_id);
+            foreach ($meta as $key => $values) {
+                if (in_array($key, $exclude_keys))
+                    continue;
+                foreach ($values as $val) {
+                    add_post_meta($new_id, $key, maybe_unserialize($val));
+                }
+            }
+
+            // Set new version + draft status
+            $template_versions = cpp_get_template_versions();
+            $latest = array_key_last($template_versions);
+            update_post_meta($new_id, '_cpp_template_version', $latest);
+            update_post_meta($new_id, '_cpp_status', 'Draft');
+            update_post_meta($new_id, '_cpp_last_edited', current_time('mysql'));
+
+            // --- KEY PATCH: Immediately redirect so the clone logic only runs once! ---
+            $wizard_url = add_query_arg([
+                'cafeteria_plan_id' => $new_id
+            ], site_url('/generator-wizard/'));
+            wp_redirect($wizard_url);
+            exit;
+        }
+    }  */
+
+
+
     // Check if the user is logged in    
 
     $steps = cpp_get_wizard_steps();
@@ -343,7 +435,7 @@ function cpp_wizard_process_form($steps, &$current_step, &$caf_plan_id)
     if (isset($_POST['cpp_wizard_submit_step'])) {
         $submittedStep = intval($_POST['cpp_wizard_submit_step']);
 
-        if ($caf_plan_id === 0) {
+        if (!$caf_plan_id || get_post_type($caf_plan_id) !== 'cafeteria_plan') {
             $caf_plan_id = wp_insert_post([
                 'post_type' => 'cafeteria_plan',
                 'post_title' => 'Draft Cafeteria Plan - ' . current_time('mysql'),
@@ -384,7 +476,13 @@ function cpp_wizard_process_form($steps, &$current_step, &$caf_plan_id)
                 }
             }
             update_post_meta($caf_plan_id, '_cpp_last_edited', current_time('mysql'));
-            update_post_meta($caf_plan_id, '_cpp_status', 'Draft'); // or change to 'In Progress', etc.
+            $current_status = get_post_meta($caf_plan_id, '_cpp_status', true);
+            if ($current_status !== 'Finalized') {
+                update_post_meta($caf_plan_id, '_cpp_status', 'Draft');
+            } elseif ($current_status === 'Finalized') {
+                update_post_meta($caf_plan_id, '_cpp_status', 'Editing');
+            }
+            // or change to 'In Progress', etc.
 
         }
 
@@ -646,11 +744,12 @@ function cpp_wizard_render_preview_step($caf_plan_id)
         <p style="margin-top: 15px;">
             <!-- GET-based PDF generation link -->
             <a href="<?php echo esc_url(add_query_arg([
-                'caf_plan_pdf' => 1,
+                'cpp_pdf_redirect' => 1,
                 'plan_id' => $caf_plan_id
-            ], home_url('/'))); ?>" target="_blank" class="button">
+            ], home_url('/'))); ?>" class="button">
                 Generate Final PDF
             </a>
+
         </p>
     <?php endif; ?>
 <?php
@@ -661,6 +760,9 @@ function cpp_wizard_render_preview_step($caf_plan_id)
  */
 function cpp_wizard_generate_pdf($caf_plan_id)
 {
+    if (!$caf_plan_id || get_post_type($caf_plan_id) !== 'cafeteria_plan') {
+        wp_die('Invalid or missing plan ID.');
+    }
     error_log('DEBUG: Entered cpp_wizard_generate_pdf function.');
 
     if (ob_get_length()) {
@@ -736,6 +838,9 @@ function cpp_wizard_generate_pdf($caf_plan_id)
 ';
     $plan_options_selected_str = get_post_meta($caf_plan_id, '_cpp_plan_options', true);
     $plan_options_selected = array_filter(explode(',', $plan_options_selected_str));
+    update_post_meta($caf_plan_id, '_cpp_status', 'Finalized');
+    update_post_meta($caf_plan_id, '_cpp_last_edited', current_time('mysql'));
+
     $html .= cpp_build_intro_header($company_name, $effective_date, $plan_options_selected);
 
 
@@ -879,6 +984,9 @@ function cpp_render_plan_dashboard()
         if ($is_outdated) {
             echo ' <span style="color:red; font-weight:bold;">⚠ Outdated</span>';
         }
+        $upgrade_url = esc_url(add_query_arg([
+            'plan_id' => $plan->ID,
+        ], home_url('/plan-upgrade/'))); // update URL if needed        
         echo '</td>';
 
         echo '<td style="padding: 8px;">' . esc_html($date) . '</td>';
@@ -888,6 +996,9 @@ function cpp_render_plan_dashboard()
             <a href="' . $download_url . '" class="button" target="_blank">Download PDF</a>
             <a href="' . $edit_url . '" class="button" style="margin-left:10px;">Edit</a>
         </td>';
+        if ($is_outdated) {
+            echo '<a href="' . $upgrade_url . '" class="button" style="margin-left:10px;">Upgrade Plan</a>';
+        }
         echo '</tr>';
     }
 
@@ -895,6 +1006,268 @@ function cpp_render_plan_dashboard()
     return ob_get_clean();
 }
 add_shortcode('cafeteria_plan_dashboard', 'cpp_render_plan_dashboard');
+
+
+
+function cpp_diff_html_sections($old, $new)
+{
+    if (!$old)
+        return '<ins style="background:#eaffea;">' . $new . '</ins>';
+    if (!$new)
+        return '<del style="background:#ffecec;">' . $old . '</del>';
+    if ($old === $new)
+        return $new;
+    // Replace old with redline, show new as insert
+    return '<del style="background:#ffecec;">' . $old . '</del><ins style="background:#eaffea;">' . $new . '</ins>';
+}
+
+
+
+
+// Helper: Generate a real HTML diff (returns valid HTML with <ins> and <del> tags)
+/* function cpp_real_html_diff($old_html, $new_html)
+{
+    return DiffHelper::calculate(
+        $old_html,
+        $new_html,
+        'Inline', // Output format
+        [
+            'detailLevel' => 'word',
+            'insertMarkers' => ['<ins style="background:#eaffea;text-decoration:none;">', '</ins>'],
+            'deleteMarkers' => ['<del style="background:#ffecec;text-decoration:line-through;">', '</del>'],
+            'lineNumbers' => false,
+            'resultForIdenticals' => '',
+            // **The magic option below disables table output!**
+            'rendererOptions' => [
+                'showLineNumbers' => false,
+                'detailLevel' => 'word',
+                'mergeThreshold' => 0.8,
+                'outputTagAsString' => false, // This tells the renderer to output HTML tags, not a table
+                'separateBlock' => false,     // This disables separate blocks (i.e., disables the diff table)
+            ],
+        ]
+    );
+} */
+
+// Section-by-section legal redline builder using DiffHelper
+/* function cpp_build_sectional_redline_doc($company, $date, $options, $template_data, $old_version, $new_version)
+{
+    $html = cpp_build_intro_header($company, $date, $options);
+
+    $old_blocks = $template_data[$old_version]['components'] ?? [];
+    $new_blocks = $template_data[$new_version]['components'] ?? [];
+
+    foreach ($options as $option) {
+        $old = isset($old_blocks[$option]) ? $old_blocks[$option] : '';
+        $new = isset($new_blocks[$option]) ? $new_blocks[$option] : '';
+        // Use the simple legal-style redline for each section
+        $html .= cpp_diff_html_sections($old, $new);
+    }
+    return $html;
+} */
+
+// Tag-based inline redline for only the <span class="cpp-template" data-key="...">...</span> regions
+function cpp_redline_tagged_template_regions($old_html, $new_html)
+{
+    $old_doc = new DOMDocument();
+    $new_doc = new DOMDocument();
+    @$old_doc->loadHTML('<?xml encoding="utf-8" ?>' . $old_html);
+    @$new_doc->loadHTML('<?xml encoding="utf-8" ?>' . $new_html);
+
+    $xpath_old = new DOMXPath($old_doc);
+    $xpath_new = new DOMXPath($new_doc);
+
+    // Gather all old <span class="cpp-template" data-key="...">
+    $old_spans = [];
+    foreach ($xpath_old->query('//span[contains(@class,"cpp-template")]') as $span) {
+        $key = $span->getAttribute('data-key');
+        $old_spans[$key] = $span->nodeValue;
+    }
+
+    foreach ($xpath_new->query('//span[contains(@class,"cpp-template")]') as $span) {
+        $key = $span->getAttribute('data-key');
+        $old = isset($old_spans[$key]) ? $old_spans[$key] : '';
+        $new = $span->nodeValue;
+        if ($old !== $new) {
+            $diff = cpp_diff_html_sections($old, $new);
+
+            // Replace with diff, even if not valid XML!
+            $owner = $span->ownerDocument;
+            // Safely inject HTML into the span
+            $tmp = new DOMDocument();
+            @$tmp->loadHTML('<?xml encoding="utf-8" ?><span>' . $diff . '</span>');
+            foreach ($span->childNodes as $child) {
+                $span->removeChild($child);
+            }
+            // Import each child node from tmp into main doc
+            $imported = [];
+            foreach ($tmp->getElementsByTagName('span')->item(0)->childNodes as $child) {
+                $imported[] = $owner->importNode($child, true);
+            }
+            foreach ($imported as $node) {
+                $span->appendChild($node);
+            }
+        }
+    }
+
+
+    // Extract just the body’s innerHTML (no full <html> tags)
+    $body = $new_doc->getElementsByTagName('body')->item(0);
+    $new_html_with_diff = '';
+    foreach ($body->childNodes as $child) {
+        $new_html_with_diff .= $new_doc->saveHTML($child);
+    }
+    return $new_html_with_diff;
+}
+
+
+
+
+// Shortcode to show the redline/amendment adoption flow
+add_shortcode('cafeteria_plan_upgrade', 'cpp_render_upgrade_flow');
+function cpp_render_upgrade_flow($atts = [])
+{
+    if (!is_user_logged_in()) {
+        return '<p>Please log in to review and adopt plan amendments.</p>';
+    }
+
+    // Get plan_id from URL (?plan_id=123)
+    $plan_id = isset($_GET['plan_id']) ? intval($_GET['plan_id']) : 0;
+    if (!$plan_id || get_post_type($plan_id) !== 'cafeteria_plan') {
+        return '<p>Invalid or missing plan.</p>';
+    }
+
+    $user_id = get_current_user_id();
+    $author_id = (int) get_post_field('post_author', $plan_id);
+    if ($author_id !== $user_id) {
+        return '<p>You do not have permission to view this plan.</p>';
+    }
+
+    // Get version info
+    $current_version = get_post_meta($plan_id, '_cpp_template_version', true) ?: 'v1';
+    $all_versions = cpp_get_template_versions();
+    $latest_version = array_key_last($all_versions);
+
+    if ($current_version === $latest_version) {
+        return '<p>This plan already uses the latest template version.</p>';
+    }
+
+    // Get user’s plan options
+    $plan_options_str = get_post_meta($plan_id, '_cpp_plan_options', true);
+    $plan_options = array_filter(explode(',', $plan_options_str));
+
+    // Build diff for each plan option
+    $redlines = [];
+    foreach ($plan_options as $opt) {
+        $old = isset($all_versions[$current_version]['components'][$opt]) ? $all_versions[$current_version]['components'][$opt] : '';
+        $new = isset($all_versions[$latest_version]['components'][$opt]) ? $all_versions[$latest_version]['components'][$opt] : '';
+        $redlines[$opt] = cpp_diff_html_sections($old, $new);
+    }
+
+    // Handle form POST (adoption)
+    $messages = [];
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cpp_upgrade_accept'])) {
+        $e_sign = sanitize_text_field($_POST['cpp_esignature'] ?? '');
+        if (!$e_sign) {
+            $messages[] = '<span style="color:red;">Please enter your full name as an e-signature.</span>';
+        } else {
+            // Record the upgrade and audit info
+            update_post_meta($plan_id, '_cpp_template_version', $latest_version);
+            update_post_meta($plan_id, '_cpp_status', 'Finalized');
+            update_post_meta($plan_id, '_cpp_last_edited', current_time('mysql'));
+            update_post_meta($plan_id, '_cpp_upgrade_audit', [
+                'user_id' => $user_id,
+                'signed_name' => $e_sign,
+                'ip' => $_SERVER['REMOTE_ADDR'],
+                'datetime' => current_time('mysql'),
+                'from_version' => $current_version,
+                'to_version' => $latest_version
+            ]);
+            $messages[] = '<span style="color:green;">Amendment adopted! Your plan now uses the latest version.</span>';
+
+            // JS: Open PDF download in new tab, then redirect after 1s
+            echo '
+                <script>
+                window.onload = function() {
+                    window.open("' . esc_url_raw(add_query_arg(['caf_plan_pdf' => 1, 'plan_id' => $plan_id], home_url('/'))) . '", "_blank");
+                    setTimeout(function() {
+                        window.location.href = "' . esc_url(home_url('/user-dashboard/')) . '";
+                    }, 1200);
+                };
+                </script>
+                ';
+        }
+    }
+
+    ob_start();
+
+    // Place this after ob_start();
+    $company_name = get_post_meta($plan_id, '_cpp_company_name', true);
+    $effective_date = get_post_meta($plan_id, '_cpp_effective_date', true);
+    $plan_options_selected = $plan_options;
+
+    if (!function_exists('cpp_build_full_doc_html')) {
+        function cpp_build_full_doc_html($company, $date, $options, $template_data, $version)
+        {
+            $html = cpp_build_intro_header($company, $date, $options);
+            $blocks = $template_data[$version]['components'] ?? [];
+            foreach ($options as $option) {
+                if (isset($blocks[$option])) {
+                    $html .= $blocks[$option];
+                }
+            }
+            return $html;
+        }
+    }
+    $old_html = cpp_build_full_doc_html($company_name, $effective_date, $plan_options, $all_versions, $current_version);
+    $new_html = cpp_build_full_doc_html($company_name, $effective_date, $plan_options, $all_versions, $latest_version);
+
+    $sectional_redline = cpp_redline_tagged_template_regions($old_html, $new_html);
+
+
+
+    ?>
+    <div class="cpp-upgrade-wrapper" style="padding: 32px; margin: 40px auto; max-width: 860px;">
+        <h2>Cafeteria Plan Amendment Adoption</h2>
+        <p>Your current plan uses <strong><?php echo esc_html($all_versions[$current_version]['label']); ?></strong>. The
+            latest version is <strong><?php echo esc_html($all_versions[$latest_version]['label']); ?></strong>.</p>
+        <h3>What’s Changed?</h3>
+        <?php foreach ($redlines as $section => $diff_html): ?>
+            <div style="margin-bottom: 32px;">
+                <h4><?php echo esc_html($section); ?></h4>
+                <div class="cpp-redline-section" style="border:1px solid #ccc; padding:12px; background:#f9f9f9;">
+                    <?php echo $diff_html; ?>
+                </div>
+            </div>
+        <?php endforeach; ?>
+
+
+        <h3>Full Redline Preview (Entire Document)</h3>
+        <div
+            style="border:2px solid #d44; background:#ffffff; padding:18px; margin-bottom:32px; font-size:14px; font-family:Times New Roman,serif;">
+            <?php echo $sectional_redline; ?>
+        </div>
+
+
+
+        <form method="post" style="margin-top:32px; border-top: 1px solid #ccc; padding-top:20px;">
+            <?php foreach ($messages as $msg)
+                echo $msg; ?>
+            <label><strong>E-signature:</strong>
+                <input type="text" name="cpp_esignature" placeholder="Full legal name"
+                    style="width:320px; margin-left:12px;" required>
+            </label>
+            <br><br>
+            <label>
+                <input type="checkbox" name="cpp_agree" required> I have read and agree to adopt the above amendments.
+            </label>
+            <br><br>
+            <button type="submit" name="cpp_upgrade_accept" class="button button-primary">Adopt & Sign Amendment</button>
+        </form>
+    </div>
+    <?php
+    return ob_get_clean();
+}
 
 
 /**
