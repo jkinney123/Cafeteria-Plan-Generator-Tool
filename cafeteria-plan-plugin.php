@@ -13,6 +13,7 @@ if (!defined('ABSPATH')) {
 
 require_once __DIR__ . '/vendor/autoload.php';
 use Dompdf\Dompdf;
+use DiffMatchPatch\DiffMatchPatch;
 use Jfcherng\Diff\DiffHelper;
 
 
@@ -199,17 +200,46 @@ function cpp_get_template_versions()
         'v1' => [
             'label' => 'Version 1 (2025)',
             'components' => [
-                'Pre-Tax Premiums' => '<h3>Pre-Tax Premiums</h3><p>The Premium Payment Plan allows employees to pay their share of premiums for medical, dental, or vision coverage on a pre-tax basis. <span class="cpp-template" data-key="Pre-Tax_Premiums">Up to $3,000/year</span>.</p>',
+                'Pre-Tax Premiums' => '<h3>Pre-Tax Premiums</h3>'
+                    // Main test paragraph (major rewrite test)
+                    . '<p><span class="cpp-template" data-key="plan-purpose">This Plan exists to give eligible employees (“Employees”) a variety of benefit choices, such as medical, dental, and vision insurance, a Health Savings Account (“HSA”), a Health Flexible Spending Arrangement (“Health FSA”), and a Dependent Care Assistance Plan (“Dependent Care FSA”). Employees can pay for these benefits on a pre-tax basis, which lowers their taxable income.</span></p>'
+                    // Test 1: Minor wording tweak (should be inline)
+                    . '<p><span class="cpp-template" data-key="test1">This Plan allows eligible employees to pay for certain benefits on a pre-tax basis, lowering their taxable income.</span></p>'
+                    // Test 3: Demographic variable (should be inline)
+                    . '<p><span class="cpp-template" data-key="test3">This Cafeteria Plan is adopted by {{company_name}} and is effective as of {{effective_date}}.</span></p>'
+                    // Test 4: Add/remove sentences (likely inline)
+                    . '<p><span class="cpp-template" data-key="test4">The Dependent Care Assistance Plan allows employees to pay for eligible dependent care expenses on a pre-tax basis. Employees must follow all IRS rules regarding reimbursements.</span></p>'
+                    // Test 5: Substantial content change (should be full replacement)
+                    . '<p><span class="cpp-template" data-key="test5">Employees may elect to contribute to a Health Savings Account (HSA), which allows tax-free contributions, growth, and withdrawals for qualified medical expenses.</span></p>'
+                    . '<p><span class="cpp-template" data-key="test_s1">Eligible employees may participate in this Plan after completing 30 days of service.</span></p>'
+                    . '<p><span class="cpp-template" data-key="test_s2">Benefits under this Plan are subject to annual limits as set by the IRS.</span></p>'
+                    . '<p><span class="cpp-template" data-key="test_s3">Contributions are made on a pre-tax basis. Participation is voluntary.</span></p>'
+                    . '<p><span class="cpp-template" data-key="test_s4">This Plan is offered by {{company_name}} and provides a range of healthcare options, including vision and dental.</span></p>'
+                    . '<p><span class="cpp-template" data-key="test_s5">Employees may enroll in this Plan after completing 30 days of service. Claims must be submitted by March 31 for reimbursement</span></p>',
                 'Health Flexible Spending Account (Health FSA)' => '<h3>Health Flexible Spending Account (Health FSA)</h3><p>The Health Flexible Spending Arrangement (Health FSA) reimburses eligible medical expenses, including dental and vision care, using pre-tax dollars.</p>',
                 'Health Savings Account (HSA)' => '<h3>Health Savings Account (HSA)</h3><p>Employees may elect to contribute to a Health Savings Account (HSA), which allows tax-free contributions, growth, and withdrawals for qualified medical expenses.</p>',
                 'Dependent Care Account' => '<h3>Dependent Care Account</h3><p>The Dependent Care Assistance Plan (Dependent Care FSA) reimburses qualifying child and dependent care costs to enable employees to work or seek employment.</p>',
             ]
         ],
-        // Add future versions here
         'v2' => [
             'label' => 'Version 2 (2026)',
             'components' => [
-                'Pre-Tax Premiums' => '<h3>Pre-Tax Premiums</h3><p>The Premium Payment Plan allows employees to pay their share of premiums for medical, dental, or vision coverage on a pre-tax basis. <span class="cpp-template" data-key="Pre-Tax_Premiums">Up to $3,500/year and is portable</span>.</p>',
+                'Pre-Tax Premiums' => '<h3>Pre-Tax Premiums</h3>'
+                    // Main test paragraph (major rewrite test)
+                    . '<p><span class="cpp-template" data-key="plan-purpose">This Plan gives eligible employees (“Employees”) a range of benefit options, including medical, dental, and vision coverage, a Health Savings Account (“HSA”), Health Flexible Spending Arrangement (“Health FSA”), and Dependent Care Assistance Plan (“Dependent Care FSA”). Employees may pay for these benefits with pre-tax salary reductions, lowering their taxable income and enhancing their take-home pay.</span></p>'
+                    // Test 1: Minor wording tweak (should be inline)
+                    . '<p><span class="cpp-template" data-key="test1">This Plan allows eligible employees to pay for qualified benefits on a pre-tax basis, reducing their taxable income.</span></p>'
+                    // Test 3: Demographic variable (should be inline)
+                    . '<p><span class="cpp-template" data-key="test3">This Cafeteria Plan has been adopted by {{company_name}} and shall be effective as of {{effective_date}}.</span></p>'
+                    // Test 4: Add/remove sentences (likely inline)
+                    . '<p><span class="cpp-template" data-key="test4">The Dependent Care Assistance Plan reimburses employees for eligible dependent care expenses using pre-tax contributions. All reimbursements are subject to IRS rules and plan guidelines.</span></p>'
+                    // Test 5: Substantial content change (should be full replacement)
+                    . '<p><span class="cpp-template" data-key="test5">The Health Savings Account (HSA) program enables eligible employees to make contributions with pre-tax dollars. These funds may be used for qualified medical expenses, and the account balance can be carried forward from year to year.</span></p>'
+                    . '<p><span class="cpp-template" data-key="test_s1">Eligible employees may participate in this Plan following completion of 30 days of service.</span></p>'
+                    . '<p><span class="cpp-template" data-key="test_s2">Benefits under this Plan are subject to annual limits as set by the IRS. All changes to limits will be communicated to employees in advance.</span></p>'
+                    . '<p><span class="cpp-template" data-key="test_s3">Contributions are made on a pre-tax basis.</span></p>'
+                    . '<p><span class="cpp-template" data-key="test_s4">{{company_name}} sponsors this Plan, giving employees multiple benefit choices such as dental and vision coverage.</span></p>'
+                    . '<p><span class="cpp-template" data-key="test_s5">Employees are eligible to participate following 30 days of employment. Claims must be submitted by March 31 to be reimbursed.</span></p>',
                 'Health Flexible Spending Account (Health FSA)' => '<h3>Health Flexible Spending Account (Health FSA)</h3><p>Updated details about Health FSA...</p>',
                 'Health Savings Account (HSA)' => '<h3>Health Savings Account (HSA)</h3><p>Updated details about HSA...</p>',
                 'Dependent Care Account' => '<h3>Dependent Care Account</h3><p>Updated details about Dependent Care Account...</p>',
@@ -217,6 +247,7 @@ function cpp_get_template_versions()
         ],
     ];
 }
+
 
 
 /**
@@ -247,49 +278,6 @@ function cpp_wizard_shortcode()
             update_post_meta($caf_plan_id, '_cpp_last_edited', current_time('mysql'));
         }
     }
-
-
-
-    /* if (isset($_GET['upgrade_plan_id']) && is_numeric($_GET['upgrade_plan_id'])) {
-        $old_id = intval($_GET['upgrade_plan_id']);
-        $author_id = (int) get_post_field('post_author', $old_id);
-
-        if ($author_id === get_current_user_id()) {
-            // Clone logic
-            $new_id = wp_insert_post([
-                'post_type' => 'cafeteria_plan',
-                'post_title' => 'Upgraded Plan - ' . current_time('mysql'),
-                'post_status' => 'draft',
-                'post_author' => $author_id,
-            ]);
-
-            // Copy meta (except for version and status)
-            $exclude_keys = ['_cpp_status', '_cpp_template_version'];
-            $meta = get_post_meta($old_id);
-            foreach ($meta as $key => $values) {
-                if (in_array($key, $exclude_keys))
-                    continue;
-                foreach ($values as $val) {
-                    add_post_meta($new_id, $key, maybe_unserialize($val));
-                }
-            }
-
-            // Set new version + draft status
-            $template_versions = cpp_get_template_versions();
-            $latest = array_key_last($template_versions);
-            update_post_meta($new_id, '_cpp_template_version', $latest);
-            update_post_meta($new_id, '_cpp_status', 'Draft');
-            update_post_meta($new_id, '_cpp_last_edited', current_time('mysql'));
-
-            // --- KEY PATCH: Immediately redirect so the clone logic only runs once! ---
-            $wizard_url = add_query_arg([
-                'cafeteria_plan_id' => $new_id
-            ], site_url('/generator-wizard/'));
-            wp_redirect($wizard_url);
-            exit;
-        }
-    }  */
-
 
 
     // Check if the user is logged in    
@@ -634,6 +622,80 @@ function cpp_build_intro_header($company_name, $effective_date, $plan_options_se
     return $header_html;
 }
 
+function cpp_build_full_doc_html($plan_id, $template_data, $version, $redline = false, $old_version = null)
+{
+    // Fetch demographic tokens
+    $company_name = esc_html(get_post_meta($plan_id, '_cpp_company_name', true));
+    $effective_date = esc_html(get_post_meta($plan_id, '_cpp_effective_date', true));
+    $plan_options_selected_str = get_post_meta($plan_id, '_cpp_plan_options', true);
+    $plan_options_selected = array_filter(explode(',', $plan_options_selected_str));
+
+    // CSS (keep only one version, copy from PDF function)
+    $html = '
+    <style>
+    .pdf-preview-wrapper {
+        background: #fff;
+        padding: 72pt;
+        margin: 40px auto;
+        max-width: 816px;
+        font-family: "Times New Roman", Times, serif;
+        font-size: 12pt;
+        line-height: 1.5;
+        color: #000;
+        box-shadow: 0 0 10px rgba(0,0,0,0.08);
+    }
+    .pdf-preview-wrapper h1,
+    .pdf-preview-wrapper h2,
+    .pdf-preview-wrapper h3 {
+        font-family: "Times New Roman", Times, serif;
+        font-weight: bold;
+        text-align: center;
+        margin-top: 24pt;
+        margin-bottom: 12pt;
+    }
+    .pdf-preview-wrapper h1 { font-size: 18pt; text-transform: uppercase; }
+    .pdf-preview-wrapper h2 { font-size: 16pt; }
+    .pdf-preview-wrapper h3 { font-size: 14pt; }
+    .pdf-preview-wrapper p { margin: 0 0 12pt 0; }
+    .pdf-preview-wrapper .intro-page { page-break-after: always; margin-bottom: 120pt; }
+    .pdf-preview-wrapper .intro-page div { margin-top: 12pt; }
+    .pdf-preview-wrapper .footer-area { margin-top: 40pt; text-align: center; font-size: 11pt; color: #333; }
+</style>
+
+    ';
+
+    $html .= '<div class="pdf-preview-wrapper">';
+    // Cover page
+    $html .= '<div class="intro-page">' . cpp_build_intro_header($company_name, $effective_date, $plan_options_selected) . '</div>';
+
+    $blocks = $template_data[$version]['components'] ?? [];
+    $old_blocks = $old_version ? ($template_data[$old_version]['components'] ?? []) : [];
+
+    // Main content
+    foreach ($plan_options_selected as $option) {
+        $option = trim($option);
+        if (!$redline) {
+            if (isset($blocks[$option])) {
+                $html .= $blocks[$option];
+            }
+        } else {
+            $old = isset($old_blocks[$option]) ? $old_blocks[$option] : '';
+            $new = isset($blocks[$option]) ? $blocks[$option] : '';
+            $html .= cpp_redline_template_regions_dmp($old, $new);
+        }
+    }
+
+    $html .= '<p style="text-align:right; font-size:10pt;"><em>Template Version: ' . esc_html($version) . '</em></p>';
+    $html .= '<div class="footer-area"><p>&copy; ' . date('Y') . '  Kinney Law & Compliance. All rights reserved.</p></div>';
+
+    $html .= '</div>'; // Close pdf-preview-wrapper
+    // Always replace tokens last
+    $html = cpp_replace_tokens($html, $plan_id);
+
+    return $html;
+}
+
+
 
 
 /**
@@ -643,117 +705,24 @@ function cpp_wizard_render_preview_step($caf_plan_id)
 {
     ?>
     <h2>Preview Cafeteria Plan</h2>
-
-
-    <style>
-        .pdf-preview-wrapper {
-            background: #ffffff;
-            padding: 72pt;
-            margin: 40px auto;
-            max-width: 816px;
-            box-shadow: 0 0 12px rgba(0, 0, 0, 0.15);
-            font-family: 'Times New Roman', Times, serif;
-            font-size: 12pt;
-            line-height: 1.5;
-            color: #000;
-        }
-
-        .pdf-preview-wrapper h1,
-        .pdf-preview-wrapper h2,
-        .pdf-preview-wrapper h3 {
-            font-family: 'Times New Roman', Times, serif;
-            font-weight: bold;
-            text-align: center;
-            margin-top: 24pt;
-            margin-bottom: 12pt;
-        }
-
-        .pdf-preview-wrapper h1 {
-            font-size: 18pt;
-            text-transform: uppercase;
-        }
-
-        .pdf-preview-wrapper h2 {
-            font-size: 16pt;
-        }
-
-        .pdf-preview-wrapper h3 {
-            font-size: 14pt;
-        }
-
-        .pdf-preview-wrapper p {
-            margin: 0 0 12pt 0;
-        }
-
-
-        .intro-page {
-            page-break-after: always;
-            margin-bottom: 120pt;
-        }
-
-        .intro-page div {
-            margin-top: 12pt;
-        }
-    </style>
-    <div class="pdf-preview-wrapper">
-
-        <?php
-        $company_name = get_post_meta($caf_plan_id, '_cpp_company_name', true);
-        $effective_date = get_post_meta($caf_plan_id, '_cpp_effective_date', true);
-        $plan_details = get_post_meta($caf_plan_id, '_cpp_plan_details', true);
-        $special_req = get_post_meta($caf_plan_id, '_cpp_special_requirements', true);
-
-        $company_name = esc_html($company_name);
-        $effective_date = esc_html($effective_date);
-        $plan_details = esc_html($plan_details);
-        $special_req = esc_html($special_req);
-
-        $include_cobra = get_post_meta($caf_plan_id, '_cpp_include_cobra', true);  // yes/no
-        $include_fsa = get_post_meta($caf_plan_id, '_cpp_include_fsa', true);    // yes/no
-        $benefits_str = get_post_meta($caf_plan_id, '_cpp_benefits_included', true); // comma separated
-        $benefits_arr = array_filter(explode(',', $benefits_str));
-
-        ?>
-        <div class="intro-page">
-            <?php
-            $plan_options_selected_str = get_post_meta($caf_plan_id, '_cpp_plan_options', true);
-            $plan_options_selected = array_filter(explode(',', $plan_options_selected_str));
-            echo cpp_build_intro_header($company_name, $effective_date, $plan_options_selected);
-            ?>
-        </div>
-
-        <?php
-        $plan_options_selected_str = get_post_meta($caf_plan_id, '_cpp_plan_options', true);
-        $plan_options_selected = array_filter(explode(',', $plan_options_selected_str));
-
-        $template_version = get_post_meta($caf_plan_id, '_cpp_template_version', true) ?: 'v1';
-        $template_data = cpp_get_template_versions();
-        $plan_text_blocks = $template_data[$template_version]['components'] ?? [];
-
-
-        foreach ($plan_options_selected as $option) {
-            $option = trim($option);
-            if (isset($plan_text_blocks[$option])) {
-                echo $plan_text_blocks[$option];
-            }
-        }
-        ?>
-    </div>
-
+    <?php
+    $template_version = get_post_meta($caf_plan_id, '_cpp_template_version', true) ?: 'v1';
+    $template_data = cpp_get_template_versions();
+    echo cpp_build_full_doc_html($caf_plan_id, $template_data, $template_version, false);
+    ?>
     <?php if ($caf_plan_id): ?>
         <p style="margin-top: 15px;">
-            <!-- GET-based PDF generation link -->
             <a href="<?php echo esc_url(add_query_arg([
                 'cpp_pdf_redirect' => 1,
                 'plan_id' => $caf_plan_id
             ], home_url('/'))); ?>" class="button">
                 Generate Final PDF
             </a>
-
         </p>
     <?php endif; ?>
 <?php
 }
+
 
 /**
  * 12) PDF Generation
@@ -792,89 +761,16 @@ function cpp_wizard_generate_pdf($caf_plan_id)
     // Let's load library in case we want to conditionally add text
     $library = cpp_load_plan_library();
 
-    // Build the final PDF HTML with basic styling
-    $html = '
-<style>
-    body {
-        font-family: "Times New Roman", serif;
-        font-size: 12pt;
-        line-height: 1.5;
-        margin: 72pt;
-        color: #000;
-    }
-    h1, h2, h3 {
-        font-family: "Times New Roman", serif;
-        font-weight: bold;
-        text-align: center;
-        margin-top: 24pt;
-        margin-bottom: 12pt;
-    }
-    h1 {
-        font-size: 18pt;
-        text-transform: uppercase;
-    }
-    h2 {
-        font-size: 16pt;
-    }
-    h3 {
-        font-size: 14pt;
-    }
-    p {
-        margin: 0 0 12pt 0;
-    }
-
-    .pdf-preview-wrapper {
-        background: #fff;
-        padding: 72px;
-        margin: 0 auto;
-        max-width: 816px;
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-        font-family: "Times New Roman", serif;
-        font-size: 12pt;
-        line-height: 1.5;
-        color: #000;
-    }
-</style>
-';
-    $plan_options_selected_str = get_post_meta($caf_plan_id, '_cpp_plan_options', true);
-    $plan_options_selected = array_filter(explode(',', $plan_options_selected_str));
     update_post_meta($caf_plan_id, '_cpp_status', 'Finalized');
     update_post_meta($caf_plan_id, '_cpp_last_edited', current_time('mysql'));
 
-    $html .= cpp_build_intro_header($company_name, $effective_date, $plan_options_selected);
-
-
-    $html .= '<hr>';
-
+    $template_version = get_post_meta($caf_plan_id, '_cpp_template_version', true) ?: 'v1';
+    $template_data = cpp_get_template_versions();
+    $html = cpp_build_full_doc_html($caf_plan_id, $template_data, $template_version, false); // false = not redline
 
     error_log('DEBUG: HTML for PDF => ' . $html);
 
     try {
-
-
-        // Prepare dynamic text based on Plan Options
-        $plan_options_selected_str = get_post_meta($caf_plan_id, '_cpp_plan_options', true);
-        $plan_options_selected = array_filter(explode(',', $plan_options_selected_str));
-
-        $template_version = get_post_meta($caf_plan_id, '_cpp_template_version', true) ?: 'v1';
-        $template_data = cpp_get_template_versions();
-        $plan_text_blocks = $template_data[$template_version]['components'] ?? [];
-
-
-        foreach ($plan_options_selected as $option) {
-            $option = trim($option);
-            if (isset($plan_text_blocks[$option])) {
-                $html .= $plan_text_blocks[$option];
-            }
-        }
-
-        $html .= '<p style="text-align:right; font-size:10pt;"><em>Template Version: ' . esc_html($template_version) . '</em></p>';
-
-        // Footer
-        $html .= '<div class="footer-area">
-        <p>&copy; ' . date('Y') . '  Kinney Law & Compliance. All rights reserved.</p>
-        </div>';
-
         $dompdf->loadHtml($html);
         $dompdf->setPaper('A4', 'portrait');
         $dompdf->render();
@@ -893,6 +789,7 @@ function cpp_wizard_generate_pdf($caf_plan_id)
         echo '<p>Sorry, an error occurred generating the PDF: ' . esc_html($e->getMessage()) . '</p>';
     }
     exit;
+
 }
 
 function cpp_render_plan_dashboard()
@@ -1008,67 +905,38 @@ function cpp_render_plan_dashboard()
 add_shortcode('cafeteria_plan_dashboard', 'cpp_render_plan_dashboard');
 
 
-
-function cpp_diff_html_sections($old, $new)
+function cpp_dmp_word_diff($old, $new)
 {
-    if (!$old)
-        return '<ins style="background:#eaffea;">' . $new . '</ins>';
-    if (!$new)
-        return '<del style="background:#ffecec;">' . $old . '</del>';
-    if ($old === $new)
-        return $new;
-    // Replace old with redline, show new as insert
-    return '<del style="background:#ffecec;">' . $old . '</del><ins style="background:#eaffea;">' . $new . '</ins>';
-}
+    $dmp = new DiffMatchPatch();
 
+    // Tokenize by word (preserve spaces/punctuation)
+    $old_words = preg_split('/(\s+)/u', $old, -1, PREG_SPLIT_DELIM_CAPTURE);
+    $new_words = preg_split('/(\s+)/u', $new, -1, PREG_SPLIT_DELIM_CAPTURE);
+    $old_joined = implode("\t", $old_words);
+    $new_joined = implode("\t", $new_words);
 
+    // Run diff
+    $diffs = $dmp->diff_main($old_joined, $new_joined);
+    $dmp->diff_cleanupSemantic($diffs);
 
-
-// Helper: Generate a real HTML diff (returns valid HTML with <ins> and <del> tags)
-/* function cpp_real_html_diff($old_html, $new_html)
-{
-    return DiffHelper::calculate(
-        $old_html,
-        $new_html,
-        'Inline', // Output format
-        [
-            'detailLevel' => 'word',
-            'insertMarkers' => ['<ins style="background:#eaffea;text-decoration:none;">', '</ins>'],
-            'deleteMarkers' => ['<del style="background:#ffecec;text-decoration:line-through;">', '</del>'],
-            'lineNumbers' => false,
-            'resultForIdenticals' => '',
-            // **The magic option below disables table output!**
-            'rendererOptions' => [
-                'showLineNumbers' => false,
-                'detailLevel' => 'word',
-                'mergeThreshold' => 0.8,
-                'outputTagAsString' => false, // This tells the renderer to output HTML tags, not a table
-                'separateBlock' => false,     // This disables separate blocks (i.e., disables the diff table)
-            ],
-        ]
-    );
-} */
-
-// Section-by-section legal redline builder using DiffHelper
-/* function cpp_build_sectional_redline_doc($company, $date, $options, $template_data, $old_version, $new_version)
-{
-    $html = cpp_build_intro_header($company, $date, $options);
-
-    $old_blocks = $template_data[$old_version]['components'] ?? [];
-    $new_blocks = $template_data[$new_version]['components'] ?? [];
-
-    foreach ($options as $option) {
-        $old = isset($old_blocks[$option]) ? $old_blocks[$option] : '';
-        $new = isset($new_blocks[$option]) ? $new_blocks[$option] : '';
-        // Use the simple legal-style redline for each section
-        $html .= cpp_diff_html_sections($old, $new);
+    // Process diffs to wrap in <ins> and <del>
+    $html = '';
+    foreach ($diffs as $part) {
+        list($op, $data) = $part;
+        $data = str_replace("\t", '', $data); // reassemble word chunks
+        if ($op === $dmp::DIFF_INSERT) {
+            $html .= '<ins style="background:#eaffea;">' . htmlspecialchars($data) . '</ins>';
+        } elseif ($op === $dmp::DIFF_DELETE) {
+            $html .= '<del style="background:#ffecec;">' . htmlspecialchars($data) . '</del>';
+        } else {
+            $html .= htmlspecialchars($data);
+        }
     }
     return $html;
-} */
-
-// Tag-based inline redline for only the <span class="cpp-template" data-key="...">...</span> regions
-function cpp_redline_tagged_template_regions($old_html, $new_html)
+}
+function cpp_redline_template_regions_dmp($old_html, $new_html)
 {
+    // Load both old and new into DOMs
     $old_doc = new DOMDocument();
     $new_doc = new DOMDocument();
     @$old_doc->loadHTML('<?xml encoding="utf-8" ?>' . $old_html);
@@ -1077,51 +945,67 @@ function cpp_redline_tagged_template_regions($old_html, $new_html)
     $xpath_old = new DOMXPath($old_doc);
     $xpath_new = new DOMXPath($new_doc);
 
-    // Gather all old <span class="cpp-template" data-key="...">
+    // Build associative array of old blocks by key
     $old_spans = [];
     foreach ($xpath_old->query('//span[contains(@class,"cpp-template")]') as $span) {
         $key = $span->getAttribute('data-key');
         $old_spans[$key] = $span->nodeValue;
     }
 
+    // Replace new spans with redline diffs
     foreach ($xpath_new->query('//span[contains(@class,"cpp-template")]') as $span) {
         $key = $span->getAttribute('data-key');
         $old = isset($old_spans[$key]) ? $old_spans[$key] : '';
         $new = $span->nodeValue;
-        if ($old !== $new) {
-            $diff = cpp_diff_html_sections($old, $new);
 
-            // Replace with diff, even if not valid XML!
-            $owner = $span->ownerDocument;
-            // Safely inject HTML into the span
-            $tmp = new DOMDocument();
-            @$tmp->loadHTML('<?xml encoding="utf-8" ?><span>' . $diff . '</span>');
-            foreach ($span->childNodes as $child) {
-                $span->removeChild($child);
-            }
-            // Import each child node from tmp into main doc
-            $imported = [];
-            foreach ($tmp->getElementsByTagName('span')->item(0)->childNodes as $child) {
-                $imported[] = $owner->importNode($child, true);
-            }
-            foreach ($imported as $node) {
-                $span->appendChild($node);
-            }
+        // Generate word-level diff using your cpp_dmp_word_diff function
+        $diff = cpp_dmp_word_diff($old, $new);
+
+        // Replace all child nodes with the redline HTML
+        while ($span->firstChild) {
+            $span->removeChild($span->firstChild);
+        }
+        // Use a dummy DOM to convert diff HTML string into DOM nodes
+        $tmp = new DOMDocument();
+        @$tmp->loadHTML('<?xml encoding="utf-8" ?><span>' . $diff . '</span>');
+        foreach ($tmp->getElementsByTagName('span')->item(0)->childNodes as $child) {
+            $span->appendChild($new_doc->importNode($child, true));
         }
     }
 
-
-    // Extract just the body’s innerHTML (no full <html> tags)
+    // Extract just the body’s innerHTML (to skip <html><body>)
     $body = $new_doc->getElementsByTagName('body')->item(0);
-    $new_html_with_diff = '';
+    $out = '';
     foreach ($body->childNodes as $child) {
-        $new_html_with_diff .= $new_doc->saveHTML($child);
+        $out .= $new_doc->saveHTML($child);
     }
-    return $new_html_with_diff;
+    return $out;
+}
+
+
+function cpp_sentence_split($text)
+{
+    // Basic sentence split (imperfect, but handles most English)
+    $sentences = preg_split('/(?<=[.?!])\s+(?=[A-Z])/', trim($text), -1, PREG_SPLIT_NO_EMPTY);
+    return $sentences;
 }
 
 
 
+function cpp_replace_tokens($html, $plan_id)
+{
+    // Fetch all needed meta
+    $company_name = esc_html(get_post_meta($plan_id, '_cpp_company_name', true));
+    $effective_date = esc_html(get_post_meta($plan_id, '_cpp_effective_date', true));
+    // Add more tokens here as needed
+
+    // Replace tokens in the HTML
+    $html = str_replace('{{company_name}}', $company_name, $html);
+    $html = str_replace('{{effective_date}}', $effective_date, $html);
+    // Add more replacements as needed
+
+    return $html;
+}
 
 // Shortcode to show the redline/amendment adoption flow
 add_shortcode('cafeteria_plan_upgrade', 'cpp_render_upgrade_flow');
@@ -1161,7 +1045,8 @@ function cpp_render_upgrade_flow($atts = [])
     foreach ($plan_options as $opt) {
         $old = isset($all_versions[$current_version]['components'][$opt]) ? $all_versions[$current_version]['components'][$opt] : '';
         $new = isset($all_versions[$latest_version]['components'][$opt]) ? $all_versions[$latest_version]['components'][$opt] : '';
-        $redlines[$opt] = cpp_diff_html_sections($old, $new);
+        $redlines[$opt] = cpp_dmp_word_diff(strip_tags($old), strip_tags($new));
+
     }
 
     // Handle form POST (adoption)
@@ -1206,24 +1091,10 @@ function cpp_render_upgrade_flow($atts = [])
     $effective_date = get_post_meta($plan_id, '_cpp_effective_date', true);
     $plan_options_selected = $plan_options;
 
-    if (!function_exists('cpp_build_full_doc_html')) {
-        function cpp_build_full_doc_html($company, $date, $options, $template_data, $version)
-        {
-            $html = cpp_build_intro_header($company, $date, $options);
-            $blocks = $template_data[$version]['components'] ?? [];
-            foreach ($options as $option) {
-                if (isset($blocks[$option])) {
-                    $html .= $blocks[$option];
-                }
-            }
-            return $html;
-        }
-    }
-    $old_html = cpp_build_full_doc_html($company_name, $effective_date, $plan_options, $all_versions, $current_version);
-    $new_html = cpp_build_full_doc_html($company_name, $effective_date, $plan_options, $all_versions, $latest_version);
-
-    $sectional_redline = cpp_redline_tagged_template_regions($old_html, $new_html);
-
+    $template_data = cpp_get_template_versions();
+    $old_html = cpp_build_full_doc_html($plan_id, $template_data, $current_version, false);
+    $new_html = cpp_build_full_doc_html($plan_id, $template_data, $latest_version, false);
+    $sectional_redline = cpp_build_full_doc_html($plan_id, $template_data, $latest_version, true, $current_version);
 
 
     ?>
@@ -1243,10 +1114,8 @@ function cpp_render_upgrade_flow($atts = [])
 
 
         <h3>Full Redline Preview (Entire Document)</h3>
-        <div
-            style="border:2px solid #d44; background:#ffffff; padding:18px; margin-bottom:32px; font-size:14px; font-family:Times New Roman,serif;">
-            <?php echo $sectional_redline; ?>
-        </div>
+        <?php echo $sectional_redline; ?>
+
 
 
 
