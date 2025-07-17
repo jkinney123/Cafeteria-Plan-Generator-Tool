@@ -1,7 +1,9 @@
 {
     "name": "joeki/wordpress-plugins",
     "require": {
-        "dompdf/dompdf": "^3.1"
+        "dompdf/dompdf": "^3.1",
+        "jfcherng/php-diff": "^6.16",
+        "yetanotherape/diff-match-patch": "^1.1"
     },
     "authors": [
         {
