@@ -1,6 +1,22 @@
 <?php
 if (!defined('ABSPATH'))
     exit;
+<<<<<<< HEAD
+=======
+
+add_action('wp_enqueue_scripts', function () {
+    if (is_page(array('generator-wizard', 'plan-upgrade'))) {  // Add any other slugs used for preview/redline
+        wp_enqueue_script(
+            'pagedjs',
+            'https://unpkg.com/pagedjs/dist/paged.polyfill.js',
+            [],
+            null,
+            true // in footer
+        );
+    }
+});
+
+>>>>>>> 89f1b8706a63c466e96af4f70c1dc599727cdfd1
 /**
  * 3) GET-based PDF route: https://yoursite.com/?caf_plan_pdf=1&plan_id=123
  */
@@ -624,7 +640,11 @@ function cpp_wizard_render_preview_step($caf_plan_id)
                 This is a live preview of your cafeteria plan. Please review carefully before generating your final PDF.
             </p>
         </div>
+<<<<<<< HEAD
         <div style="width: 100%; max-width: 900px; margin: 0 auto 24px auto;">
+=======
+        <div class="pagedjs-preview">
+>>>>>>> 89f1b8706a63c466e96af4f70c1dc599727cdfd1
             <?php
             $template_version = get_post_meta($caf_plan_id, '_cpp_template_version', true) ?: 'v1';
             $template_data = cpp_get_template_versions();
@@ -754,7 +774,12 @@ function cpp_render_upgrade_flow($atts = [])
 
 
         <h3>Full Redline Preview (Entire Document)</h3>
+<<<<<<< HEAD
         <?php echo $sectional_redline; ?>
+=======
+        echo '<div class="pagedjs-preview">' . $sectional_redline . '</div>';
+
+>>>>>>> 89f1b8706a63c466e96af4f70c1dc599727cdfd1
 
 
 

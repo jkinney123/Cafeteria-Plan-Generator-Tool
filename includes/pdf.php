@@ -133,6 +133,30 @@ function cpp_build_full_doc_html($plan_id, $template_data, $version, $redline = 
     $preview_css = '';
     if ($is_preview) {
         $preview_css = '
+<<<<<<< HEAD
+=======
+        .pagedjs-preview {
+    background: #ddd;
+    padding: 32px 0;
+    min-height: 100vh;
+    overflow-x: auto;
+}
+.pagedjs_page {
+    background: #fff;
+    margin: 0 auto 32px auto;
+    box-shadow: 0 0 12px 2px rgba(0,0,0,0.13);
+    border-radius: 6px;
+    width: 816px;
+    min-height: 1056px;
+    position: relative;
+    overflow: hidden;
+    display: block;
+}
+.pagedjs_page .pagedjs_area {
+    padding: 72pt 54pt 72pt 54pt; /* Top, Right, Bottom, Left */
+}
+
+>>>>>>> 89f1b8706a63c466e96af4f70c1dc599727cdfd1
         .pdf-preview-wrapper {
             background: #fff;
             box-shadow: 0 0 12px 2px rgba(0,0,0,0.10);
