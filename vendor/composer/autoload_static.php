@@ -16,6 +16,11 @@ class ComposerStaticInitbb90572d177bbe64997a3185c33f3070
         array (
             'Masterminds\\' => 12,
         ),
+        'J' => 
+        array (
+            'Jfcherng\\Utility\\' => 17,
+            'Jfcherng\\Diff\\' => 14,
+        ),
         'F' => 
         array (
             'FontLib\\' => 8,
@@ -23,6 +28,7 @@ class ComposerStaticInitbb90572d177bbe64997a3185c33f3070
         'D' => 
         array (
             'Dompdf\\' => 7,
+            'DiffMatchPatch\\' => 15,
         ),
     );
 
@@ -39,6 +45,16 @@ class ComposerStaticInitbb90572d177bbe64997a3185c33f3070
         array (
             0 => __DIR__ . '/..' . '/masterminds/html5/src',
         ),
+        'Jfcherng\\Utility\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/jfcherng/php-mb-string/src',
+            1 => __DIR__ . '/..' . '/jfcherng/php-color-output/src',
+        ),
+        'Jfcherng\\Diff\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/jfcherng/php-diff/src',
+            1 => __DIR__ . '/..' . '/jfcherng/php-sequence-matcher/src',
+        ),
         'FontLib\\' => 
         array (
             0 => __DIR__ . '/..' . '/dompdf/php-font-lib/src/FontLib',
@@ -46,6 +62,10 @@ class ComposerStaticInitbb90572d177bbe64997a3185c33f3070
         'Dompdf\\' => 
         array (
             0 => __DIR__ . '/..' . '/dompdf/dompdf/src',
+        ),
+        'DiffMatchPatch\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/yetanotherape/diff-match-patch/src',
         ),
     );
 
